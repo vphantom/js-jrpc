@@ -182,7 +182,7 @@
 				if (window.XMLHttpRequest) {
 					req = new XMLHttpRequest();
 				} else {
-					req = new ActiveXObject("Microsoft.XMLHTTP");
+					req = new window.ActiveXObject("Microsoft.XMLHTTP");
 				}
 				req.open('POST', JRPC.u, true);
 				req.setRequestHeader("X-Requested-With", "XMLHttpRequest");
