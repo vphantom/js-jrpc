@@ -1,0 +1,35 @@
+{
+  "name": "jrpc",
+  "version": "3.0.0-alpha",
+  "description": "Streaming bidirectional backwards-compatible extended JSON-RPC 2.0 in JavaScript",
+  "main": "jrpc.js",
+  "scripts": {
+    "test": "echo Please use make test instead && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vphantom/js-jrpc.git"
+  },
+  "author": "Stéphane Lavergne <lis@imars.com> (https://github.com/vphantom)",
+  "license": "GPL-3.0",
+  "files": [
+    "LICENSE",
+    "README.md",
+    "jrpc.js",
+    "jrpc.browser.js",
+    "jrpc.min.js",
+    "jrpc.min.js.map"
+  ],
+  "private": true,
+  "bugs": {
+    "url": "https://github.com/vphantom/js-jrpc/issues"
+  },
+  "homepage": "https://github.com/vphantom/js-jrpc#readme",
+  "devDependencies": {
+    "coveralls": "^2.11.9",
+    "eslint": "^2.8.0",
+    "faucet": "0.0.1",
+    "istanbul": "^0.4.3",
+    "tape": "^4.5.1"
+  }
+}

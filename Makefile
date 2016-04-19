@@ -1,20 +1,36 @@
-JS      = uglifyjs --compress --mangle --reserved window "--comments=/Free software under/"
-JSLINT  = jslint
+BROWSERIFY := node_modules/.bin/browserify
+PHANTOMJS  := phantomjs
+JS         := node_modules/.bin/uglifyjs --compress --mangle --comments "/Free software under/"
+JSLINT     := node_modules/.bin/eslint --fix
+TAP        := node_modules/.bin/faucet
+ISTANBUL   := node_modules/.bin/istanbul
 
 help:
-	@echo "Try one of: clean, all"
+	echo "Try one of: clean, build, lint, test"
 
 clean:
-	rm -f *.min.js
+	rm -f *.browser.js *.min.js *.min.js.map
+	rm -fr coverage
 
-all:	clean $(patsubst %.js,%.min.js,$(wildcard *.js))
+build:	jrpc.min.js
 
-test:
+lint:
 	$(JSLINT) jrpc.js
+	$(JSLINT) test.js
 
-%.min.js:	%.js
-	$(JS) -o $@ -- $<
+test:	test.browser.js
+	$(ISTANBUL) cover --print none --report lcov -x test.js test.js |$(TAP)
+	$(ISTANBUL) report text-summary
+	$(PHANTOMJS) test.browser.js |$(TAP)
 
-%.min.min.js:
+%.browser.js:	%.js
+	$(BROWSERIFY) -s JRPC $< -o $@
 
-.PHONY: help all clean
+%.min.js:	%.browser.js
+	$(JS) --source-map $@.map -o $@ -- $<
+
+.PHONY: help clean build lint test
+
+.SILENT:	help test
+
+.PRECIOUS:	%.browser.js
