@@ -8,6 +8,8 @@ This rewrite is a full implementation of [JSON-RPC 2.0](http://www.jsonrpc.org/s
 - In line with [XML-RPC's introspection methods](http://scripts.incutio.com/xmlrpc/introspection.html) , the "system" root level name is reserved, which does not interfere with JSON-RPC's "rpc" reservation.
 - Backwards-compatible upgrade to extended bimodal message format if both ends support it.
 
+The only true deviation from JSON-RPC 2.0 is that, due to the async and typically real-time nature of this implementation, responses to batch requests may not necessarily be batched in matching groups.  i.e. If requests [1, 2, 3] were received, it's entirely possible that responses [1, 3] and a later response 2 may be emitted.  In practice, in a streaming communication, this wouldn't differ much because the only batches that would occur at all would be when resuming from a network interruption.
+
 ## REWRITE IN PROGRESS
 
 > This document is roughly in its final form, however the module is being rewritten from scratch to implement the changes.  This repo is **not yet usable**.
@@ -40,6 +42,7 @@ remote.expose({
     return next(null, 'pong');
   })
 }
+remote.upgrade();  // Handshake extended capabilities
 
 // Create a WebSocket connection
 var ws = new WebSocket(someURL);
@@ -100,6 +103,7 @@ wss.on('connection', function(ws) {
   var remote = new JRPC();
 
   remote.expose(...);
+  remote.upgrade();  // Handshake extended capabilities
 
   ws.on('message', function(msg) {
     remote.receive(msg);
@@ -119,7 +123,7 @@ wss.on('connection', function(ws) {
 
 ### Socket.IO
 
-On client and server sides, Socket.IO provides stability, protocol abstraction and channels.  One could perhaps even create multiple JRPC instances to assign to different channels.  The data exchange is otherwise identical to the above WebSocket examples: hand off received messages to `remote.receive()` and relay packets to the communications channel with `remote.setTransmit()`.
+On client and server sides, Socket.IO provides stability, protocol abstraction and channels.  One could perhaps even create multiple JRPC instances to assign to different channels.  The data exchange is otherwise identical to the above WebSocket examples: hand off received messages to `remote.receive()` and relay packets to the communications channel with `remote.setTransmitter()`.
 
 ### Node.JS parent-child IPC
 
@@ -127,49 +131,39 @@ One could use `process.send()` and `process.on('message')` with JSON-RPC as a mu
 
 ## API
 
+All methods return the current instance to facilitate chaining if desired.  For example:
+
+```js
+remote
+  .call('some.method', someCallback)
+  .call('other.method', otherCallback)
+  .transmit(outputFunction)
+;
+```
+
 ### remote = new JRPC([*options*])
 
 JRPC allows the creation of multiple completely independent instances.  Available options:
 
-**client:** Define and set to true if this end will originate the underlying communications channel.
+#### remoteTimeout
 
-While this implementation of JSON-RPC is client/server agnostic once a connection is established, under the hood it is useful for it to know which end initiated the connection.  The connecting end is responsible for calling the listening end's `system.listComponents()` as soon as message transmission is available, to make both ends discover each other's extensions beyond JSON-RPC 2.0.
+(Default: 10 seconds.)  When `remote.call()` queues a call for the remote end, a timer is started for this delay.  If a response wasn't received and processed by then, the queued call's return callback is invoked with an error condition and the call is flushed from the queue.  If a response eventually arrives after this time, it will be silently discarded.  This helps ensure that the callback for each call is always invoked, and that the queue doesn't grow indefinitely during network outages.
 
-If you are using JRPC on the client side and know in advance that the remote server is **not** JRPC, feel free to avoid this harmless call by skipping `client` entirely.
-
-### remote.setRemoteTimeout(*seconds*)
-
-(Default: 10 seconds.)  When `remote.call()` queues a call for the remote end, a timer is started for this delay.  If a response wasn't received and processed by then, the queued call's return callback is invoked with an error condition and the call is flushed from the queue.  If a response eventually arrives after this time, it will be silently discarded.  This helps ensure that the callback for each call is always invoked, and that the queue doesn't grow indefinitely during network outages.  Deactivate by setting explicitly to zero.
+Deactivate by setting explicitly to zero.  **CAUTION:** Without a timeout in place, your callback is no longer guaranteed to run in the event of protocol or network errors.
 
 If you expect to deal with network latency, XmlHttpRequest long-poll related delays or network outages, you might want to increase this to 60-120 seconds.
 
-### remote.setLocalTimeout(*seconds*)
+#### localTimeout
 
-(Default: 5 seconds.)  When `remote.receive()` launches exposed methods requested in the JSON-RPC request packet it received, a timer is started for this delay.  If the response callback hasn't fired by then, an error response is sent back and the call is flushed from the queue.  If the response callback does fire later, it will be silently discarded.  This helps ensure that servers always respond explicitly to calls, at the expense of possibly ignoring valid long-running responses.  Deactivate by setting explicitly to zero.
+(Default: 5 seconds.)  When `remote.receive()` launches exposed methods requested in the JSON-RPC request packet it received, a timer is started for this delay.  If the response callback hasn't fired by then, an error response is sent back and the call is flushed from the queue.  If the response callback does fire later, it will be silently discarded.  This helps ensure that servers always respond explicitly to calls, at the expense of possibly ignoring valid long-running responses.
+
+Deactivate by setting explicitly to zero.
 
 If you expect to deal with computationally-intensive methods, you might want to increase this as appropriate.  Make sure, however, that the other end will wait even longer to allow for network latency and outages on top of this execution response time.
 
-### remote.call(*methodName*, *params*, *callback*)
-
-##### Bluebird: remote.callAsync(*methodName*, *params*)
-
-Queue a call to the other end's method `methodName` with `params` as a single argument.  Your callback is _guaranteed_ to be invoked even if the server never responds, in which case it would be in error, after a timeout.
-
-While it is up to implementations to decide what to do with `params`: either an Array or an object (alas, no bare values per the specification).  I recommend an object so that properties can be named and future changes have less risk of breaking anything.
-
-```js
-remote._call('foo', [], function(err, result) {
-  if (err) {
-    // Something went wrong...
-  } else {
-    // 'result' was returned by the other end's exposed 'foo()'
-  }
-});
-```
-
 ### remote.expose(*methodName*, *callback*)
 
-Individually add declaration that `callback` as implementing `methodName` to the other end. Whenever calls from the other end will be processed, `callback` will be invoked:
+Individually add declaration that `callback` as implementing `methodName` to the other end. Whenever calls from the other end will be processed, `callback` will be invoked and is expected to call JRPC's next callback with Node standard `(err, result)` arguments:
 
 ```js
 remote.expose('foo.bar', function(params, next) {
@@ -190,13 +184,61 @@ remote.expose({
 
 Note that since periods '.' are part of property names, you'll need to use strings as keys throughout.
 
+### remote.upgrade()
+
+After having exposed your methods, if you are the origin of the network connection and you know that the other end may offer extensions beyond JSON-RPC 2.0 (i.e. this here implementation), call this method to have both ends handshake capabilities.  It is completely backwards-compatible, as a strict JSON-RPC 2.0 end point will simply respond that method `system.listComponents` doesn't exist.
+
+While this implementation of JSON-RPC is client/server agnostic once a connection is established, since only one end needs to initiate a protocol upgrade it makes sense to do so on the client side.
+
+If you are using JRPC on the client side and know in advance that the remote server is **not** JRPC, feel free to skip this step.
+
+Note that it is important to handshake _after_ having exposed your service methods, because afterwards the other end will be limited to calling method names which have been already exposed at this point.  (See `remote.call()` below.)
+
+### remote.call(*methodName*, *params*, *callback*)
+
+##### Bluebird: remote.callAsync(*methodName*, *params*)
+
+Queue a call to the other end's method `methodName` with `params` as a single argument.  Your callback is _guaranteed_ to be invoked even if the server never responds, in which case it would be in error, after a timeout.
+
+Note that after a successful `remote.upgrade()`, any attempts to call a `methodName` not disclosed by the remote end during capability handshake will immediately fail.  This is to save on useless network round-trips.
+
+While it is up to implementations to decide what to do with `params`: either an Array or an object (alas, no bare values per the specification).  I recommend an object so that properties can be named and future changes have less risk of breaking anything.
+
+```js
+remote._call('foo', [], function(err, result) {
+  if (err) {
+    // Something went wrong...
+  } else {
+    // 'result' was returned by the other end's exposed 'foo()'
+  }
+});
+```
+
+Per JSON-RPC 2.0 if an error is returned, not only is it not `null` nor `false` but it is necessarily an object with the following properties:
+
+- **code** is a number, typically negative
+- **message** is a string, not always useful however
+- **data** is optional and may be any kind of additional data about the error
+
+If you are using [Bluebird](https://github.com/petkaantonov/bluebird) globally, the promise version `remote.callAsync()` is also available:
+
+```js
+global.Promise = require('bluebird');
+var JRPC = require('jrpc');
+var remote = new JRPC();
+...
+var fooResult = yield remote.callAsync('foo', {});
+```
+
+It is **strongly recommended** to keep a non-zero remoteTimeout when using co-routines!
+
 ### remote.receive(*message*)
 
 Parse `message` as a JSON-RPC 2.0 request or response.  If it's a request, responses will be created and transmitted back (or queued).  If it's a response, callers will receive what they were waiting for.
 
 ### remote.transmit(*callback*)
 
-If there is any queued up JSON-RPC to send to the other end, `callback(data,cb)` will be called to send it.  Your callback should call us back with `null` or `false` on success, `true` on error per Node convention.  (See examples in previous section.)
+If there is any queued up JSON-RPC to send to the other end, `callback(data,cb)` will be called to send it.  It will **not** be called if nothing is pending.  Your callback should call us back with `null` or `false` on success, `true` on error per Node convention.  (See examples in previous section.)
 
 ### remote.setTransmitter(*callback*)
 
@@ -210,7 +252,7 @@ The `system` reserved module implements some handy introspection methods to help
 
 ### system.extension.dual-batch()
 
-Cannot actually be called.  Its presence indicates support for the "dual-batch" extension to JSON-RPC 2.0 which was created for this module.  It means that this end can understand messages made up of _two_ JSON-RPC 2.0 messages combined: a batch of responses and a batch of requests.  This is very useful in saving precious round trips in long-polling scenarios where both ends may send requests or notifications.  The format is simple:
+Returns true.  Its presence indicates support for the "dual-batch" extension to JSON-RPC 2.0 which was created for this module.  It means that this end can understand messages made up of _two_ JSON-RPC 2.0 messages combined: a batch of responses and a batch of requests.  This is very useful in saving precious round trips in long-polling scenarios where both ends may send requests or notifications.  The format is simple:
 
 ```json
 {
@@ -221,21 +263,16 @@ Cannot actually be called.  Its presence indicates support for the "dual-batch" 
 
 ### system.listComponents([*mine*])
 
-Like in XML-RPC, returns an object describing all exposed methods at the time it is called.  Each method name (including periods '.' treated as _regular_ characters) is paired with `true`.  Thus, in a freshly instance, it would return:
+Like in XML-RPC, returns an object describing all exposed methods at the time it is called.  Each method name (including periods '.' treated as _regular_ characters) holds `true`.  Thus, in a fresh instance, it would return:
 
 ```json
 {
   "system.listComponents": true,
-  "system.methodHelp": true,
   "system.extension.dual-batch": true
 }
 ```
 
-If provided, `mine` should contain the equivalent list from this end.  This allows for both ends to discover each other's capabilities in a single round-trip, typically initiated by the end which established the communication itself.
-
-Unlike any other method, when JRPC is handling a request or response from this call, it caches the capabilities of the other end and will use this cached information if the method is called again (or in the other direction if `mine` was provided).
-
-Because protocol extensions are declared as exposed methods, this means that protocol upgrades are available as soon as the second half of the initial round-trip, provided it is for `system.listComponents()`.  (See the `client` option to `JRPC()` above.)
+If provided, `mine` is expected to be the equivalent list from this end.  This allows for both ends to discover each other's capabilities in a single round-trip, by convention initiated by the end which established the communication, via `remote.upgrade()`.
 
 ### system.methodHelp(*methodName*)
 ### system.methodSignature(*methodName*)
