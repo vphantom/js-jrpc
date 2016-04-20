@@ -36,8 +36,8 @@ You can then integrate `bower_components/jrpc/jrpc.min.js` to your build as need
 ```js
 // Expose what the other end can call
 remote.expose({
-  ping: function(args, callback) {
-    return callback(null, 'pong');
+  ping: function(params, next) {
+    return next(null, 'pong');
   })
 }
 
@@ -59,12 +59,12 @@ remote.call('foo.bar', [], function(err, result) {
 });
 
 // Send queued messages a single time
-remote.transmit(function(msg, callback) {
+remote.transmit(function(msg, next) {
 	try {
 	  ws.send(msg);
-	  return callback(null);
+	  return next(null);
 	} catch (e) {
-	  return callback(true);
+	  return next(true);
 	}
 });
 ```
@@ -106,12 +106,12 @@ wss.on('connection', function(ws) {
   });
 
   // Let JRPC send requests and responses continuously
-  remote.setTransmitter(function(msg, callback) {
+  remote.setTransmitter(function(msg, next) {
     try {
       ws.send(msg);
-      return callback(null);
+      return next(null);
     } catch (e) {
-      return callback(true);
+      return next(true);
     }
   });
 });
@@ -139,23 +139,23 @@ If you are using JRPC on the client side and know in advance that the remote ser
 
 ### remote.setRemoteTimeout(*seconds*)
 
-(Default: 10 seconds.)  When `remote.call()` queues a call for the remote end, a timer is started for this delay.  If a response wasn't received and processed by then, the queued call's return callback is invoked with an error condition and the call is flushed from the queue.  If a response eventually arrives after this time, it will be silently discarded.  This helps ensure that the callback for each call is always invoked, and that the queue doesn't grow indefinitely during network outages.
+(Default: 10 seconds.)  When `remote.call()` queues a call for the remote end, a timer is started for this delay.  If a response wasn't received and processed by then, the queued call's return callback is invoked with an error condition and the call is flushed from the queue.  If a response eventually arrives after this time, it will be silently discarded.  This helps ensure that the callback for each call is always invoked, and that the queue doesn't grow indefinitely during network outages.  Deactivate by setting explicitly to zero.
 
 If you expect to deal with network latency, XmlHttpRequest long-poll related delays or network outages, you might want to increase this to 60-120 seconds.
 
 ### remote.setLocalTimeout(*seconds*)
 
-(Default: 5 seconds.)  When `remote.receive()` launches exposed methods requested in the JSON-RPC request packet it received, a timer is started for this delay.  If the response callback hasn't fired by then, an error response is sent back and the call is flushed from the queue.  If the response callback does fire later, it will be silently discarded.  This helps ensure that servers always respond explicitly to calls, at the expense of possibly ignoring valid long-running responses.
+(Default: 5 seconds.)  When `remote.receive()` launches exposed methods requested in the JSON-RPC request packet it received, a timer is started for this delay.  If the response callback hasn't fired by then, an error response is sent back and the call is flushed from the queue.  If the response callback does fire later, it will be silently discarded.  This helps ensure that servers always respond explicitly to calls, at the expense of possibly ignoring valid long-running responses.  Deactivate by setting explicitly to zero.
 
 If you expect to deal with computationally-intensive methods, you might want to increase this as appropriate.  Make sure, however, that the other end will wait even longer to allow for network latency and outages on top of this execution response time.
 
-### remote.call(*methodName*, *args*, *callback*)
+### remote.call(*methodName*, *params*, *callback*)
 
-##### Bluebird: remote.callAsync(*methodName*, *args*)
+##### Bluebird: remote.callAsync(*methodName*, *params*)
 
-Queue a call to the other end's method `methodName` with `args` as a single argument.  Your callback is _guaranteed_ to be invoked even if the server never responds, in which case it would be in error, after a timeout.
+Queue a call to the other end's method `methodName` with `params` as a single argument.  Your callback is _guaranteed_ to be invoked even if the server never responds, in which case it would be in error, after a timeout.
 
-While it is up to implementations to decide what to do with `args`: either an Array or an object (alas, no bare values per the specification).  I recommend an object so that properties can be named and future changes have less risk of breaking anything.
+While it is up to implementations to decide what to do with `params`: either an Array or an object (alas, no bare values per the specification).  I recommend an object so that properties can be named and future changes have less risk of breaking anything.
 
 ```js
 remote._call('foo', [], function(err, result) {
@@ -172,8 +172,8 @@ remote._call('foo', [], function(err, result) {
 Individually add declaration that `callback` as implementing `methodName` to the other end. Whenever calls from the other end will be processed, `callback` will be invoked:
 
 ```js
-remote.expose('foo.bar', function(args, callback) {
-  return callback(null, 'This is my result string');
+remote.expose('foo.bar', function(params, next) {
+  return next(null, 'This is my result string');
 });
 ```
 
@@ -183,8 +183,8 @@ Add many declarations at once:
 
 ```js
 remote.expose({
-  'foo.bar': function(args, callback) { ... },
-  'ping': function(args, callback) { ... }
+  'foo.bar': function(params, next) { ... },
+  'ping': function(params, next) { ... }
 });
 ```
 
