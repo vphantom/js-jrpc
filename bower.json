@@ -5,7 +5,7 @@
   "authors": [
     "Stéphane Lavergne <lis@imars.com> (https://github.com/vphantom)"
   ],
-  "license": "GPL-3.0",
+  "license": "MIT",
   "homepage": "https://github.com/vphantom/js-jrpc",
   "private": true,
   "ignore": [
