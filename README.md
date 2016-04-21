@@ -1,4 +1,4 @@
-# jrpc v3.0.0-alpha
+# jrpc v3.0.0-beta
 
 Streaming bidirectional backwards-compatible extended JSON-RPC 2.0 in JavaScript
 
@@ -9,10 +9,6 @@ This rewrite is a full implementation of [JSON-RPC 2.0](http://www.jsonrpc.org/s
 - Backwards-compatible upgrade to extended bimodal message format if both ends support it.
 
 The only true deviation from JSON-RPC 2.0 is that, due to the async and typically real-time nature of this implementation, responses to batch requests may not necessarily be batched in matching groups.  i.e. If requests [1, 2, 3] were received, it's entirely possible that responses [1, 3] and a later response 2 may be emitted.  In practice, in a streaming communication, this wouldn't differ much because the only batches that would occur at all would be when resuming from a network interruption.
-
-## REWRITE IN PROGRESS
-
-> This document is roughly in its final form, however the module is being rewritten from scratch to implement the changes.  This repo is **not yet usable**.
 
 ## Installation & Usage
 
@@ -279,21 +275,12 @@ If provided, `mine` is expected to be the equivalent list from this end.  This a
 
 Reserved per XML-RPC, but not implemented.
 
+## MIT License
 
-## FUTURE EXTENSIONS
+Copyright (c) 2016 Stephane Lavergne <https://github.com/vphantom>
 
-For time considerations, I had to put aside the idea of native bindings for this release.  The idea was to use `system.listComponents()` to discover the other end's exposed methods early and make them directly available in the `remote` instance, making this possible:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
-```js
-remote.system.methodHelp('system.extension.dual-batch', function(err, help) {
-  if (err) {
-    // Unknown method, perhaps?
-  } else {
-    console.log('system.extension.dual-batch() usage: ' + help);
-  }
-});
-```
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
-This will involve breaking the API to add underscores '_' to JRPC methods (i.e. `remote._call()`) to keep them out of the way of remote calls.
-
-Because bindings do not add _that_ much convenience however, they were excluded from this release and to keep this simpler API cleanest at the expense of future drop-in compatibility, I took away the prefix underscores.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
