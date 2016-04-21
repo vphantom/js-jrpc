@@ -26,6 +26,7 @@
   "homepage": "https://github.com/vphantom/js-jrpc#readme",
   "devDependencies": {
     "bluebird": "^3.3.5",
+    "browserify": "^13.0.0",
     "coveralls": "^2.11.9",
     "eslint": "^2.8.0",
     "faucet": "0.0.1",

@@ -5,6 +5,8 @@
 
 'use strict';
 
+global.setImmediate = require('timers').setImmediate;
+
 /**
  * Constructor
  *
@@ -16,14 +18,16 @@
  */
 function JRPC(options) {
   this.transmitter = null;
-  this.remoteTimeout = 10000;
-  this.localTimeout = 5000;
+  this.remoteTimeout = 60000;
+  this.localTimeout = 0;
   this.serial = 0;
   this.outbox = {
     requests : [],
     responses: []
   };
   this.inbox = {};
+  this.localTimers = {};
+  this.outTimers = {};
   this.localComponents = {
     'system.listComponents'      : true,
     'system.extension.dual-batch': true
@@ -31,13 +35,13 @@ function JRPC(options) {
   this.remoteComponents = {};
   this.exposed = {};
 
-  this.exposed['system.listComponents'] = function(params, next) {
+  this.exposed['system.listComponents'] = (function(params, next) {
     if (typeof params === 'object') {
       this.remoteComponents = params;
       this.remoteComponents['system._upgraded'] = true;
     }
-    return next(null, this.components);
-  };
+    return next(null, this.localComponents);
+  }).bind(this);
 
   this.exposed['system.extension.dual-batch'] = function(params, next) {
     return next(null, true);
@@ -124,11 +128,9 @@ function transmit(callback) {
 
   // Send msg using callback
   setImmediate(
-    callback.bind(
-      null,
-      JSON.stringify(msg),
-      confirmTransmit.bind(this, outpacket)
-    )
+    callback,
+    JSON.stringify(msg),
+    confirmTransmit.bind(this, outpacket)
   );
 
   return this;
@@ -240,12 +242,12 @@ function upgrade() {
   return this.call(
     'system.listComponents',
     this.localComponents,
-    function(err, result) {
-      if (!err) {
+    (function(err, result) {
+      if (!err && typeof result === 'object') {
         this.remoteComponents = result;
         this.remoteComponents['system._upgraded'] = true;
       }
-    }
+    }).bind(this)
   );
 }
 
@@ -272,7 +274,7 @@ function call(methodName, params, next) {
     && !(methodName in this.remoteComponents)
   ) {
     // We're upgraded, yet method name isn't found, immediate error!
-    setImmediate(next.bind(null, -1001));
+    setImmediate(next, -1001);
     return this;
   }
 
@@ -285,8 +287,11 @@ function call(methodName, params, next) {
   this.inbox[this.serial] = next;
   this.outbox.requests.push(request);
 
+  // If we're interactive, send the new request
+  this.transmit();
+
   if (this.remoteTimeout > 0) {
-    setTimeout(
+    this.outTimers[this.serial] = setTimeout(
       deliverResponse.bind(
         this,
         {
@@ -296,10 +301,13 @@ function call(methodName, params, next) {
             code   : -1000,
             message: 'Timed out waiting for response'
           }
-        }
+        },
+        true
       ),
       this.remoteTimeout
     );
+  } else {
+    this.outTimers[this.serial] = true;  // Placeholder
   }
 
   return this;
@@ -319,13 +327,24 @@ function call(methodName, params, next) {
 /**
  * Deliver a received result
  *
- * @param {Object} res The single result to parse
+ * @param {Object}  res     The single result to parse
+ * @param {boolean} timeout We come from a timeout
  *
  * @return {undefined} No return value
  */
-function deliverResponse(res) {
-  var err = null;
+function deliverResponse(res, timeout) {
+  var err = false;
   var result = null;
+
+  if ('id' in res && res['id'] in this.outTimers) {
+    if (timeout === true) {
+      clearTimeout(this.outTimers[res['id']]);
+    }
+    delete this.outTimers[res['id']];
+  } else {
+    // Silently ignoring second response to same request
+    return;
+  }
 
   if ('id' in res && res['id'] in this.inbox) {
     if ('error' in res) {
@@ -333,7 +352,7 @@ function deliverResponse(res) {
     } else {
       result = res['result'];
     }
-    setImmediate(this.inbox[res['id']].bind(null, err, result));
+    setImmediate(this.inbox[res['id']], err, result);
     delete this.inbox[res['id']];
   }
   // Silently ignore timeout duplicate and malformed responses
@@ -420,26 +439,24 @@ function serveRequest(request) {
     }
   }
 
-  setImmediate(
-    this.exposed[method].bind(
-      null,
-      params,
-      sendResponse.bind(this, id)
-    )
-  );
+  setImmediate(this.exposed[method], params, sendResponse.bind(this, id));
 
   if (this.localTimeout > 0) {
-    setTimeout(
+    this.localTimers[id] = setTimeout(
       sendResponse.bind(
         this,
         id,
         {
           code   : -1002,
           message: 'Method handler timed out'
-        }
+        },
+        undefined,
+        true  // Hint that we're the timeout
       ),
       this.localTimeout
     );
+  } else {
+    this.localTimers[id] = true;  // Placeholder
   }
 
   return;
@@ -450,17 +467,28 @@ function serveRequest(request) {
  *
  * @type {JRPC~serviceResultCallback}
  *
- * @param {number}  id     Serial number, bound, no need to supply
- * @param {boolean} err    Anything non-falsey means error and is sent
- * @param {Object}  result Any result you wish to produce
+ * @param {number}  id        Serial number, bound, no need to supply
+ * @param {boolean} err       Anything non-falsey means error and is sent
+ * @param {Object}  result    Any result you wish to produce
+ * @param {boolean} [timeout] We're invoked from the method timeout
  *
  * @return {undefined} No return value
  */
-function sendResponse(id, err, result) {
+function sendResponse(id, err, result, timeout) {
   var response = {
     jsonrpc: '2.0',
     id     : id
   };
+
+  if (id in this.localTimers) {
+    if (timeout === true) {
+      clearTimeout(this.localTimers[id]);
+    }
+    delete this.localTimers[id];
+  } else {
+    // Silently ignoring second response to same request
+    return;
+  }
 
   if (id === null) {
     return;
@@ -472,11 +500,22 @@ function sendResponse(id, err, result) {
         code   : err,
         message: 'error'
       };
+    } else if (err === true) {
+      response.error = {
+        code   : -1,
+        message: 'error'
+      };
     } else if (typeof err === 'string') {
       response.error = {
         code   : -1,
         message: err
       };
+    } else if (
+      typeof err === 'object'
+      && 'code' in err
+      && 'message' in err
+    ) {
+      response.error = err;
     } else {
       response.error = {
         code   : -2,
@@ -488,6 +527,9 @@ function sendResponse(id, err, result) {
     response.result = result;
   }
   this.outbox.responses.push(response);
+
+  // If we're interactive, send the new response
+  this.transmit();
 }
 
 

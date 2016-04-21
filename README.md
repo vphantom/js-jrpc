@@ -35,7 +35,7 @@ You can then integrate `bower_components/jrpc/jrpc.min.js` to your build as need
 // Expose what the other end can call
 remote.expose({
   ping: function(params, next) {
-    return next(null, 'pong');
+    return next(false, 'pong');
   })
 }
 remote.upgrade();  // Handshake extended capabilities
@@ -61,7 +61,7 @@ remote.call('foo.bar', [], function(err, result) {
 remote.transmit(function(msg, next) {
 	try {
 	  ws.send(msg);
-	  return next(null);
+	  return next(false);
 	} catch (e) {
 	  return next(true);
 	}
@@ -109,7 +109,7 @@ wss.on('connection', function(ws) {
   remote.setTransmitter(function(msg, next) {
     try {
       ws.send(msg);
-      return next(null);
+      return next(false);
     } catch (e) {
       return next(true);
     }
@@ -143,7 +143,7 @@ JRPC allows the creation of multiple completely independent instances.  Availabl
 
 #### remoteTimeout
 
-(Default: 10 seconds.)  When `remote.call()` queues a call for the remote end, a timer is started for this delay.  If a response wasn't received and processed by then, the queued call's return callback is invoked with an error condition and the call is flushed from the queue.  If a response eventually arrives after this time, it will be silently discarded.  This helps ensure that the callback for each call is always invoked, and that the queue doesn't grow indefinitely during network outages.
+(Default: 60 seconds.)  When `remote.call()` queues a call for the remote end, a timer is started for this delay.  If a response wasn't received and processed by then, the queued call's return callback is invoked with an error condition and the call is flushed from the queue.  If a response eventually arrives after this time, it will be silently discarded.  This helps ensure that the callback for each call is always invoked, and that the queue doesn't grow indefinitely during network outages.
 
 Deactivate by setting explicitly to zero.  **CAUTION:** Without a timeout in place, your callback is no longer guaranteed to run in the event of protocol or network errors.
 
@@ -151,9 +151,7 @@ If you expect to deal with network latency, XmlHttpRequest long-poll related del
 
 #### localTimeout
 
-(Default: 5 seconds.)  When `remote.receive()` launches exposed methods requested in the JSON-RPC request packet it received, a timer is started for this delay.  If the response callback hasn't fired by then, an error response is sent back and the call is flushed from the queue.  If the response callback does fire later, it will be silently discarded.  This helps ensure that servers always respond explicitly to calls, at the expense of possibly ignoring valid long-running responses.
-
-Deactivate by setting explicitly to zero.
+(Default: 0, meaning inactive)  When `remote.receive()` launches exposed methods requested in the JSON-RPC request packet it received, a timer is started for this delay.  If the response callback hasn't fired by then, an error response is sent back and the call is flushed from the queue.  If the response callback does fire later, it will be silently discarded.  This helps ensure that servers always respond explicitly to calls, at the expense of possibly ignoring valid long-running responses.
 
 If you expect to deal with computationally-intensive methods, you might want to increase this as appropriate.  Make sure, however, that the other end will wait even longer to allow for network latency and outages on top of this execution response time.
 
@@ -163,7 +161,7 @@ Individually add declaration that `callback` as implementing `methodName` to the
 
 ```js
 remote.expose('foo.bar', function(params, next) {
-  return next(null, 'This is my result string');
+  return next(false, 'This is my result string');
 });
 ```
 
