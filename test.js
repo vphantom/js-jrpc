@@ -242,7 +242,7 @@ test('I/O and timeouts', function(t) {
   var end1 = new JRPC({remoteTimeout: 0.35, localTimeout: 0.15});
   var end2 = new JRPC({remoteTimeout: 0.35, localTimeout: 0});
 
-  t.plan(21);
+  t.plan(22);
 
   end1.expose('echo', testEcho);
   end1.expose('errorTrue', testErrorTrue);
@@ -360,7 +360,7 @@ test('I/O and timeouts', function(t) {
       'receiver upgraded successfully'
     );
 
-    end1.call('non-existent', [], function(err) {
+    end1.call('non-existent', function(err) {
       t.ok(err, 'call to non-existent method yields error');
       t.equals(err.code, -32601, 'call to non-existent method yields error -32601');
     });
@@ -372,6 +372,17 @@ test('I/O and timeouts', function(t) {
         t.pass('system.extension.dual-batch returned success via JSON-RPC');
       }
     });
+
+    end1.expose('listen', function(params, next) {
+      t.deepEquals(
+        params,
+        ['test notification'],
+        'call without callback (notification) made it through'
+      );
+      next(true);
+    });
+    end2.remoteComponents['listen'] = true;
+    end2.notify('listen', ['test notification']);
 
     end1.call('slow', ['expecting network timeout'], function(err, res) {
       if (err) {
@@ -397,7 +408,7 @@ test('I/O and timeouts', function(t) {
       }
     });
 
-    end1.call('errorTrue', [], function(err) {
+    end1.call('errorTrue', function(err) {
       t.equals(
         err.code,
         -1,

@@ -1,6 +1,6 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.JRPC = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 (function (global){
-/*! JRPC v3.0.1-beta
+/*! JRPC v3.0.2-beta
  * <https://github.com/vphantom/js-jrpc>
  * Copyright 2016 Stéphane Lavergne
  * Free software under MIT License: <https://opensource.org/licenses/MIT> */
@@ -261,8 +261,8 @@ function upgrade() {
  * Queue up a remote method call
  *
  * @param {string}               methodName Name of method to call
- * @param {(Object|Array|null)}  params     Parameters
- * @param {JRPC~receiveCallback} next       Callback to receive result
+ * @param {(Object|Array|null)}  [params]   Parameters
+ * @param {JRPC~receiveCallback} [next]     Callback to receive result
  *
  * @return {JRPC} This instance, for chaining
  */
@@ -272,15 +272,22 @@ function call(methodName, params, next) {
     method : methodName
   };
 
+  if (typeof params === 'function') {
+    next = params;
+    params = null;
+  }
+
   if (
     'system._upgraded' in this.remoteComponents
     && !(methodName in this.remoteComponents)
   ) {
     // We're upgraded, yet method name isn't found, immediate error!
-    setImmediate(next, {
-      code   : -32601,
-      message: 'Unknown remote method'
-    });
+    if (typeof next === 'function') {
+      setImmediate(next, {
+        code   : -32601,
+        message: 'Unknown remote method'
+      });
+    }
     return this;
   }
 
@@ -290,12 +297,17 @@ function call(methodName, params, next) {
     request.params = params;
   }
 
-  this.inbox[this.serial] = next;
+  if (typeof next === 'function') {
+    this.inbox[this.serial] = next;
+  }
   this.outbox.requests.push(request);
 
   // If we're interactive, send the new request
   this.transmit();
 
+  if (typeof next !== 'function') {
+    return this;
+  }
   if (this.remoteTimeout > 0) {
     this.outTimers[this.serial] = setTimeout(
       deliverResponse.bind(
@@ -476,7 +488,7 @@ function serveRequest(request) {
   setImmediate(
     this.exposed[request.method],
     params,
-    sendResponse.bind(this, id)
+    sendResponse.bind(this, id)  // id will be unknown, thus will be silent
   );
 
   return;
@@ -556,6 +568,7 @@ function sendResponse(id, err, result, timeout) {
 // Public methods
 
 JRPC.prototype.call = call;
+JRPC.prototype.notify = call;
 JRPC.prototype.expose = expose;
 JRPC.prototype.upgrade = upgrade;
 JRPC.prototype.receive = receive;

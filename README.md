@@ -1,6 +1,6 @@
-# jrpc v3.0.1-beta
+# jrpc v3.0.2-beta
 
-[![Build Status](https://travis-ci.org/vphantom/js-jrpc.svg?branch=v3.0.1-beta)](https://travis-ci.org/vphantom/js-jrpc) [![Coverage Status](https://coveralls.io/repos/github/vphantom/js-jrpc/badge.svg?branch=v3.0.1-beta)](https://coveralls.io/github/vphantom/js-jrpc?branch=v3.0.1-beta)
+[![Build Status](https://travis-ci.org/vphantom/js-jrpc.svg?branch=v3.0.2-beta)](https://travis-ci.org/vphantom/js-jrpc) [![Coverage Status](https://coveralls.io/repos/github/vphantom/js-jrpc/badge.svg?branch=v3.0.2-beta)](https://coveralls.io/github/vphantom/js-jrpc?branch=v3.0.2-beta)
 
 Streaming bidirectional backwards-compatible extended JSON-RPC 2.0 in JavaScript
 
@@ -167,6 +167,8 @@ remote.expose('foo.bar', function(params, next) {
 });
 ```
 
+Due to the nature of JSON-RPC, even methods intended to be used as notification receivers need to call `next()` with at least one parameter, so that if the method is accidentally called requesting a value, one will reach the caller.  A simple `next(true)` suffices.
+
 ### remote.expose(*object*)
 
 Add many declarations at once:
@@ -190,18 +192,18 @@ If you are using JRPC on the client side and know in advance that the remote ser
 
 Note that it is important to handshake _after_ having exposed your service methods, because afterwards the other end will be limited to calling method names which have been already exposed at this point.  (See `remote.call()` below.)
 
-### remote.call(*methodName*, *params*, *callback*)
+### remote.call(*methodName*[, *params*][, *callback*]])
 
 ##### Bluebird: remote.callAsync(*methodName*, *params*)
 
-Queue a call to the other end's method `methodName` with `params` as a single argument.  Your callback is _guaranteed_ to be invoked even if the server never responds, in which case it would be in error, after a timeout.
+Queue a call to the other end's method `methodName` with `params` as a single argument.  If you supplied a callback, it is _guaranteed_ to be invoked even if the server never responds, in which case it would be in error, after a timeout.  Note that omitting a callback prevents your application from detecting errors, so it should usually be reserved for methods which return no value (called "notifications" in JSON-RPC 2.0).
 
 Note that after a successful `remote.upgrade()`, any attempts to call a `methodName` not disclosed by the remote end during capability handshake will immediately fail.  This is to save on useless network round-trips.
 
-While it is up to implementations to decide what to do with `params`: either an Array or an object (alas, no bare values per the specification).  I recommend an object so that properties can be named and future changes have less risk of breaking anything.
+While it is up to implementations to decide what to do with `params`: either an Array or an object (alas, no bare values per the specification).  Specifying `null` is equivalent to omitting it entirely.  I recommend an object so that properties can be named and future changes have less risk of breaking anything.
 
 ```js
-remote._call('foo', [], function(err, result) {
+remote.call('foo', {}, function(err, result) {
   if (err) {
     // Something went wrong...
   } else {
@@ -227,6 +229,10 @@ var fooResult = yield remote.callAsync('foo', {});
 ```
 
 It is **strongly recommended** to keep a non-zero remoteTimeout when using co-routines!
+
+### remote.notify(*methodName*[, *params*])
+
+Convenience shortcut to `remote.call()` so that your code can more clearly distinguish between method calls expecting a return value and one-way notifications.
 
 ### remote.receive(*message*)
 
