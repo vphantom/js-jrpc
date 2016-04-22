@@ -21,6 +21,7 @@ function JRPC(options) {
   this.remoteTimeout = 60000;
   this.localTimeout = 0;
   this.serial = 0;
+  this.discardSerial = 0;
   this.outbox = {
     requests : [],
     responses: []
@@ -406,23 +407,29 @@ function expose(subject, callback) {
  * @return {undefined} No return value
  */
 function serveRequest(request) {
-  var id = request['id'] || null;
-  var method = request['method'] || null;
+  var id = null;
   var params = null;
 
-  if (!(id !== null || method !== null)) {
+  if (typeof request !== 'object' || request === null) {
     return;
   }
 
-  if (typeof method !== 'string') {
+  if (!(typeof request.jsonrpc === 'string' && request.jsonrpc === '2.0')) {
+    return;
+  }
+
+  id = (typeof request.id !== 'undefined' ? request.id : null);
+  if (typeof request.method !== 'string') {
     if (id !== null) {
+      this.localTimers[id] = true;
       setImmediate(sendResponse.bind(this, id, -32600));
     }
     return;
   }
 
-  if (!(method in this.exposed)) {
+  if (!(request.method in this.exposed)) {
     if (id !== null) {
+      this.localTimers[id] = true;
       setImmediate(sendResponse.bind(this, id, -32601));
     }
     return;
@@ -433,14 +440,17 @@ function serveRequest(request) {
       params = request['params'];
     } else {
       if (id !== null) {
+        this.localTimers[id] = true;
         setImmediate(sendResponse.bind(this, id, -32602));
       }
       return;
     }
   }
 
-  setImmediate(this.exposed[method], params, sendResponse.bind(this, id));
-
+  if (id === null) {
+    this.discardSerial--;
+    id = this.discardSerial;  // Try to avoid collisions with remote end
+  }
   if (this.localTimeout > 0) {
     this.localTimers[id] = setTimeout(
       sendResponse.bind(
@@ -456,8 +466,9 @@ function serveRequest(request) {
       this.localTimeout
     );
   } else {
-    this.localTimers[id] = true;  // Placeholder
+    this.localTimers[id] = true;
   }
+  setImmediate(this.exposed[request.method], params, sendResponse.bind(this, id));
 
   return;
 }
@@ -490,7 +501,7 @@ function sendResponse(id, err, result, timeout) {
     return;
   }
 
-  if (id === null) {
+  if (id === null || id < 0) {
     return;
   }
 

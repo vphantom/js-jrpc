@@ -12,8 +12,16 @@ function testEcho(params, next) {
   return setImmediate(next.bind(null, false, 'ECHO RESPONSE'));
 }
 
-function testError(params, next) {
+function testErrorTrue(params, next) {
   return setImmediate(next.bind(null, true));
+}
+
+function testErrorString(params, next) {
+  return setImmediate(next.bind(null, 'error string'));
+}
+
+function testErrorData(params, next) {
+  return setImmediate(next.bind(null, { hint: true }));
 }
 
 function testSlow(params, next) {
@@ -51,18 +59,120 @@ function connect(end1, end2) {
   });
 }
 
-test('Normal I/O', function(t) {
+test('Servicing requests', function(t) {
+  var r = new JRPC();
+  var emptyOutbox = {
+    requests : [],
+    responses: []
+  };
+  var i = 0;
+
+  t.plan(6);
+
+  r.expose('listener', function(params, next) {
+    t.deepEqual(
+      params,
+      { hint: true },
+      'listen-only method called with expected arguments'
+    );
+    t.equal(
+      r.discardSerial,
+      -1,
+      'for listen-only method, discardSerial was decremented exactly once'
+    );
+    return setImmediate(next.bind(null, false, 'ignored'));
+  });
+
+  r.setTransmitter(function(msg, next) {
+    msg = JSON.parse(msg);
+    switch (i) {
+      case 0:
+        t.deepEqual(
+          msg,
+          {
+            jsonrpc: '2.0',
+            id: 10,
+            error: { code: -32601, message: 'error' }
+          },
+          'garbage inputs are skipped, error -32601 confirmed (unknown method)'
+        );
+      break;
+      case 1:
+        t.deepEqual(
+          msg,
+          {
+            jsonrpc: '2.0',
+            id: 11,
+            error: { code: -32602, message: 'error' }
+          },
+          'errors -32602 confirmed (malformed params)'
+        );
+      break;
+      case 2:
+        t.deepEqual(
+          msg,
+          {
+            jsonrpc: '2.0',
+            id: 12,
+            error: { code: -32600, message: 'error' }
+          },
+          'errors -32600 confirmed (malformed method)'
+        );
+      break;
+      case 3:
+        t.deepEqual(
+          msg,
+          {
+            jsonrpc: '2.0',
+            id: 13,
+            error: { code: -32600, message: 'error' }
+          },
+          'no response was sent for listen-only method'
+        );
+      break;
+    }
+    i++;
+    return next(false);
+  });
+  r.receive([
+    { jsonrpc: '2.0', method: 'unknown', id: 10 },
+    {},
+    undefined,
+    null,
+    'this is invalid',
+    false
+  ]);
+  r.receive([
+    { jsonrpc: '2.0', method: 'system.listComponents', params: 23, id: 11 },
+    { jsonrpc: '2.0', method: 23, id: 12 },
+    { jsonrpc: '2.0', method: 'listener', params: { hint: true } },
+    { jsonrpc: '2.0', method: 23, id: 13 }
+  ]);
+
+});
+
+/*
+test('Parsing responses', function(t) {
+  t.plan(0);
+});
+*/
+
+test('I/O and timeouts', function(t) {
   var end1 = new JRPC({remoteTimeout: 0.35, localTimeout: 0.15});
   var end2 = new JRPC({remoteTimeout: 0.35, localTimeout: 0});
 
-  t.plan(11);
+  t.plan(15);
 
   end1.expose('echo', testEcho);
-  end1.expose('error', testError);
+  end1.expose('errorTrue', testErrorTrue);
+  end1.expose('errorString', testErrorString);
+  end1.expose('errorData', testErrorData);
   end1.expose('slow', testSlow);
   end2.expose({
     echo : testEcho,
-    error: testError,
+    errorTrue: testErrorTrue,
+    errorString: testErrorString,
+    errorData: testErrorData,
     slow : testSlow
   });
 
@@ -96,7 +206,9 @@ test('Normal I/O', function(t) {
           method: 'system.listComponents',
           params: {
             'echo': true,
-            'error': true,
+            'errorTrue': true,
+            'errorString': true,
+            'errorData': true,
             'slow': true,
             'system.extension.dual-batch': true,
             'system.listComponents': true
@@ -120,7 +232,9 @@ test('Normal I/O', function(t) {
           method: 'system.listComponents',
           params: {
             'echo': true,
-            'error': true,
+            'errorTrue': true,
+            'errorString': true,
+            'errorData': true,
             'slow': true,
             'system.extension.dual-batch': true,
             'system.listComponents': true
@@ -142,7 +256,9 @@ test('Normal I/O', function(t) {
         'system.listComponents': true,
         'system.extension.dual-batch': true,
         'echo': true,
-        'error': true,
+        'errorTrue': true,
+        'errorString': true,
+        'errorData': true,
         'slow': true
       },
       'origin upgraded successfully'
@@ -155,7 +271,9 @@ test('Normal I/O', function(t) {
         'system.listComponents': true,
         'system.extension.dual-batch': true,
         'echo': true,
-        'error': true,
+        'errorTrue': true,
+        'errorString': true,
+        'errorData': true,
         'slow': true
       },
       'receiver upgraded successfully'
@@ -193,11 +311,35 @@ test('Normal I/O', function(t) {
       }
     });
 
-    end1.call('error', [], function(err) {
+    end1.call('errorTrue', [], function(err) {
       t.equals(
         err.code,
         -1,
-        'error method yielded -1'
+        'errorTrue method yielded -1'
+      );
+    });
+    end1.call('errorString', [], function(err) {
+      t.equals(
+        err.code,
+        -1,
+        'errorString method yielded -1'
+      );
+      t.equals(
+        err.message,
+        'error string',
+        'errorString produced the expected error message'
+      );
+    });
+    end1.call('errorData', [], function(err) {
+      t.equals(
+        err.code,
+        -2,
+        'errorData method yielded -2'
+      );
+      t.deepEquals(
+        err.data,
+        { hint: true },
+        'errorData produced the expected extra error data'
       );
     });
   }, 500);
