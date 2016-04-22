@@ -1,4 +1,4 @@
-/*! JRPC v3.0.0-beta
+/*! JRPC v3.0.1-beta
  * <https://github.com/vphantom/js-jrpc>
  * Copyright 2016 Stéphane Lavergne
  * Free software under MIT License: <https://opensource.org/licenses/MIT> */
