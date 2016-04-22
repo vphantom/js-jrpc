@@ -29,7 +29,7 @@
     "comma-style": 1,
     "computed-property-spacing": 1,
     "eol-last": 1,
-    "indent": [ 2, 2 ],
+    "indent": [ 2, 2, {"SwitchCase": 1} ],
     "key-spacing": [ 1, {"align": "colon"} ],
     "keyword-spacing": 1,
     "linebreak-style": [ 2, "unix" ],
