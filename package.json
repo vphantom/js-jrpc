@@ -13,7 +13,7 @@
   "author": "Stéphane Lavergne <lis@imars.com> (https://github.com/vphantom)",
   "license": "MIT",
   "files": [
-    "LICENSE",
+    "LICENSE.txt",
     "README.md",
     "jrpc.js",
     "jrpc.browser.js",

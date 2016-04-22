@@ -275,7 +275,10 @@ function call(methodName, params, next) {
     && !(methodName in this.remoteComponents)
   ) {
     // We're upgraded, yet method name isn't found, immediate error!
-    setImmediate(next, -1001);
+    setImmediate(next, {
+      code   : -32601,
+      message: 'Unknown remote method'
+    });
     return this;
   }
 
@@ -468,7 +471,11 @@ function serveRequest(request) {
   } else {
     this.localTimers[id] = true;
   }
-  setImmediate(this.exposed[request.method], params, sendResponse.bind(this, id));
+  setImmediate(
+    this.exposed[request.method],
+    params,
+    sendResponse.bind(this, id)
+  );
 
   return;
 }

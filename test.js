@@ -9,7 +9,7 @@ var test = require('tape');
 var JRPC = require('./jrpc');
 
 function testEcho(params, next) {
-  return setImmediate(next.bind(null, false, 'ECHO RESPONSE'));
+  return setImmediate(next.bind(null, false, params));
 }
 
 function testErrorTrue(params, next) {
@@ -21,7 +21,7 @@ function testErrorString(params, next) {
 }
 
 function testErrorData(params, next) {
-  return setImmediate(next.bind(null, { hint: true }));
+  return setImmediate(next.bind(null, {hint: true}));
 }
 
 function testSlow(params, next) {
@@ -29,7 +29,7 @@ function testSlow(params, next) {
 }
 
 /**
- * Directly connect two JRPC end points with 50ms network delay
+ * Directly connect two JRPC end points with 50ms network latency
  *
  * @param {JRPC} end1 Connecting end
  * @param {JRPC} end2 Serving end
@@ -59,12 +59,98 @@ function connect(end1, end2) {
   });
 }
 
-test('Servicing requests', function(t) {
+
+test('Handling incoming messages', function(t) {
   var r = new JRPC();
   var emptyOutbox = {
     requests : [],
     responses: []
   };
+
+  t.plan(5);
+
+  try {
+    r.receive('[ malformed JSON here { ...');
+    t.pass('malformed JSON handled gracefully');
+  } catch (e) {
+    t.fail('malformed JSON crashed');
+  }
+
+  r.receive('[]');
+  t.deepEqual(
+    r.outbox,
+    emptyOutbox,
+    'outbox still empty after invalid or empty messages'
+  );
+  t.equal(
+    r.discardSerial,
+    0,
+    'discardSerial still zero after invalid or empty messages'
+  );
+  t.deepEqual(
+    r.localTimers,
+    {},
+    'localTimers still empty after invalid or empty messages'
+  );
+  t.deepEqual(
+    r.outTimers,
+    {},
+    'outTimers still empty after invalid or empty messages'
+  );
+});
+
+
+test('Handling outgoing messages', function(t) {
+  var r = new JRPC();
+
+  t.plan(4);
+
+  r.outbox = {
+    requests: [1, 2, 3],
+    responses: [3, 4, 5]
+  };
+  r.transmit(function(msg, next) {
+    t.deepEqual(
+      r.outbox,
+      {requests: [1, 2, 3], responses: []},
+      'outbox responses were emptied during transmission attempt'
+    );
+
+    r.outbox.responses.push(9);
+    next(true);  // We know this is a small synchronous method
+
+    t.deepEqual(
+      r.outbox,
+      {requests : [1, 2, 3], responses: [9, 3, 4, 5]},
+      'outbox responses were restored non-destructively after transmission failure'
+    );
+
+    r.outbox.responses = [];
+    r.transmit(function(msg, next) {
+      t.deepEqual(
+        r.outbox,
+        {
+          requests: [],
+          responses: []
+        },
+        'outbox requests were emptied during transmission attempt'
+      );
+
+      r.outbox.requests.push(8);
+      next(true);
+
+      t.deepEqual(
+        r.outbox,
+        {requests: [8, 1, 2, 3], responses: []},
+        'outbox requests were restored non-destructively after transmission failure'
+      );
+    });
+  });
+});
+
+
+test('Servicing requests', function(t) {
+  var r = new JRPC();
   var i = 0;
 
   t.plan(6);
@@ -72,7 +158,7 @@ test('Servicing requests', function(t) {
   r.expose('listener', function(params, next) {
     t.deepEqual(
       params,
-      { hint: true },
+      {hint: true},
       'listen-only method called with expected arguments'
     );
     t.equal(
@@ -92,50 +178,51 @@ test('Servicing requests', function(t) {
           {
             jsonrpc: '2.0',
             id: 10,
-            error: { code: -32601, message: 'error' }
+            error: {code: -32601, message: 'error'}
           },
           'garbage inputs are skipped, error -32601 confirmed (unknown method)'
         );
-      break;
+        break;
       case 1:
         t.deepEqual(
           msg,
           {
             jsonrpc: '2.0',
             id: 11,
-            error: { code: -32602, message: 'error' }
+            error: {code: -32602, message: 'error'}
           },
           'errors -32602 confirmed (malformed params)'
         );
-      break;
+        break;
       case 2:
         t.deepEqual(
           msg,
           {
             jsonrpc: '2.0',
             id: 12,
-            error: { code: -32600, message: 'error' }
+            error: {code: -32600, message: 'error'}
           },
           'errors -32600 confirmed (malformed method)'
         );
-      break;
+        break;
       case 3:
         t.deepEqual(
           msg,
           {
             jsonrpc: '2.0',
             id: 13,
-            error: { code: -32600, message: 'error' }
+            error: {code: -32600, message: 'error'}
           },
           'no response was sent for listen-only method'
         );
-      break;
+        break;
+      default:
     }
     i++;
     return next(false);
   });
   r.receive([
-    { jsonrpc: '2.0', method: 'unknown', id: 10 },
+    {jsonrpc: '2.0', method: 'unknown', id: 10},
     {},
     undefined,
     null,
@@ -143,25 +230,19 @@ test('Servicing requests', function(t) {
     false
   ]);
   r.receive([
-    { jsonrpc: '2.0', method: 'system.listComponents', params: 23, id: 11 },
-    { jsonrpc: '2.0', method: 23, id: 12 },
-    { jsonrpc: '2.0', method: 'listener', params: { hint: true } },
-    { jsonrpc: '2.0', method: 23, id: 13 }
+    {jsonrpc: '2.0', method: 'system.listComponents', params: 23, id: 11},
+    {jsonrpc: '2.0', method: 23, id: 12},
+    {jsonrpc: '2.0', method: 'listener', params: {hint: true}},
+    {jsonrpc: '2.0', method: 23, id: 13}
   ]);
-
 });
 
-/*
-test('Parsing responses', function(t) {
-  t.plan(0);
-});
-*/
 
 test('I/O and timeouts', function(t) {
   var end1 = new JRPC({remoteTimeout: 0.35, localTimeout: 0.15});
   var end2 = new JRPC({remoteTimeout: 0.35, localTimeout: 0});
 
-  t.plan(15);
+  t.plan(21);
 
   end1.expose('echo', testEcho);
   end1.expose('errorTrue', testErrorTrue);
@@ -279,6 +360,11 @@ test('I/O and timeouts', function(t) {
       'receiver upgraded successfully'
     );
 
+    end1.call('non-existent', [], function(err) {
+      t.ok(err, 'call to non-existent method yields error');
+      t.equals(err.code, -32601, 'call to non-existent method yields error -32601');
+    });
+
     end1.call('system.extension.dual-batch', [], function(err) {
       if (err) {
         t.fail('system.extension.dual-batch returned a JSON-RPC error');
@@ -338,10 +424,48 @@ test('I/O and timeouts', function(t) {
       );
       t.deepEquals(
         err.data,
-        { hint: true },
+        {hint: true},
         'errorData produced the expected extra error data'
       );
     });
+
+    setTimeout(function() {
+      // We want to continue having expected behavior without timeouts
+      end1.localTimeout = 0;
+      end1.remoteTimeout = 0;
+      end2.localTimeout = 0;
+      end2.remoteTimeout = 0;
+
+      // Let's create a batch
+      end1.setTransmitter(null);
+      end2.setTransmitter(null);
+
+      // Let's throw in an invalid response out of nowhere
+      end1.outbox.responses.push({id: 1000, result: true});
+
+      end1.call('echo', ['test'], function(err, res) {
+        t.notOk(err, 'batch echo 1 is successful');
+        t.deepEqual(res, ['test'], 'batch echo 1 returns its own params');
+      });
+      end1.call('echo', ['test2'], function(err, res) {
+        t.notOk(err, 'batch echo 2 is successful');
+        t.deepEqual(res, ['test2'], 'batch echo 2 returns its own params');
+      });
+
+      end1.setTransmitter(function(msg, next) {
+        setImmediate(function() {
+          end2.receive(msg);
+          next(false);
+        });
+      });
+
+      setTimeout(function() {
+        end2.setTransmitter(function(msg, next) {
+          end1.receive(msg);
+          next(false);
+        });
+      }, 100);
+    }, 100);
   }, 500);
 });
 
