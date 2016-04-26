@@ -1,6 +1,6 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.JRPC = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 (function (global){
-/*! JRPC v3.0.2-beta
+/*! JRPC v3.1.0
  * <https://github.com/vphantom/js-jrpc>
  * Copyright 2016 Stéphane Lavergne
  * Free software under MIT License: <https://opensource.org/licenses/MIT> */
@@ -19,6 +19,7 @@ global.setImmediate = require('timers').setImmediate;
  * @return {undefined} No return value
  */
 function JRPC(options) {
+  this.active = true;
   this.transmitter = null;
   this.remoteTimeout = 60000;
   this.localTimeout = 0;
@@ -39,7 +40,7 @@ function JRPC(options) {
   this.exposed = {};
 
   this.exposed['system.listComponents'] = (function(params, next) {
-    if (typeof params === 'object') {
+    if (typeof params === 'object' && params !== null) {
       this.remoteComponents = params;
       this.remoteComponents['system._upgraded'] = true;
     }
@@ -67,6 +68,42 @@ function JRPC(options) {
   }
 }
 
+/**
+ * Semi-destructor for limbo conditions
+ *
+ * When we lose connection permanently, we help garbage collection by removing
+ * as many references as we can, including cancelling any outstanding timers.
+ * We may still get some callbacks, but they will immediately return.
+ *
+ * @return {undefined} No return value
+ */
+function shutdown() {
+  var instance = this;
+
+  instance.active = false;
+  instance.transmitter = null;
+  instance.remoteTimeout = 0;
+  instance.localTimeout = 0;
+  instance.localComponents = {};
+  instance.remoteComponents = {};
+  instance.outbox.requests.length = 0;
+  instance.outbox.responses.length = 0;
+  instance.inbox = {};
+  instance.exposed = {};
+
+  Object.keys(instance.localTimers).forEach(function(key) {
+    clearTimeout(instance.localTimers[key]);
+    delete instance.localTimers[key];
+  });
+
+  Object.keys(instance.outTimers).forEach(function(key) {
+    clearTimeout(instance.outTimers[key]);
+    delete instance.outTimers[key];
+  });
+
+  return instance;
+}
+
 
 // I/O
 
@@ -91,7 +128,7 @@ function transmit(callback) {
   if (typeof callback !== 'function') {
     callback = this.transmitter;
   }
-  if (typeof callback !== 'function') {
+  if (!this.active || typeof callback !== 'function') {
     return this;
   }
 
@@ -171,7 +208,7 @@ function setTransmitter(callback) {
  * @return {undefined} No return value
  */
 function confirmTransmit(outpacket, err) {
-  if (err) {
+  if (this.active && err) {
     // Roll it all back into outbox (which may not be empty anymore)
     if (outpacket.responses.length > 0) {
       Array.prototype.push.apply(this.outbox.responses, outpacket.responses);
@@ -192,6 +229,10 @@ function confirmTransmit(outpacket, err) {
 function receive(msg) {
   var requests = [];
   var responses = [];
+
+  if (!this.active) {
+    return this;
+  }
 
   // If we got JSON, parse it
   if (typeof msg === 'string') {
@@ -242,6 +283,9 @@ function receive(msg) {
  * @return {JRPC} This instance, for chaining
  */
 function upgrade() {
+  if (!this.active) {
+    return this;
+  }
   return this.call(
     'system.listComponents',
     this.localComponents,
@@ -271,6 +315,10 @@ function call(methodName, params, next) {
     jsonrpc: '2.0',
     method : methodName
   };
+
+  if (!this.active) {
+    return this;
+  }
 
   if (typeof params === 'function') {
     next = params;
@@ -354,7 +402,7 @@ function deliverResponse(res, timeout) {
   var err = false;
   var result = null;
 
-  if ('id' in res && res['id'] in this.outTimers) {
+  if (this.active && 'id' in res && res['id'] in this.outTimers) {
     if (timeout === true) {
       clearTimeout(this.outTimers[res['id']]);
     }
@@ -389,6 +437,10 @@ function deliverResponse(res, timeout) {
  */
 function expose(subject, callback) {
   var name;
+
+  if (!this.active) {
+    return this;
+  }
 
   if (typeof subject === 'string') {
     this.localComponents[subject] = true;
@@ -427,7 +479,7 @@ function serveRequest(request) {
   var id = null;
   var params = null;
 
-  if (typeof request !== 'object' || request === null) {
+  if (!this.active || typeof request !== 'object' || request === null) {
     return;
   }
 
@@ -512,7 +564,7 @@ function sendResponse(id, err, result, timeout) {
     id     : id
   };
 
-  if (id in this.localTimers) {
+  if (this.active && id in this.localTimers) {
     if (timeout === true) {
       clearTimeout(this.localTimers[id]);
     }
@@ -567,6 +619,7 @@ function sendResponse(id, err, result, timeout) {
 
 // Public methods
 
+JRPC.prototype.shutdown = shutdown;
 JRPC.prototype.call = call;
 JRPC.prototype.notify = call;
 JRPC.prototype.expose = expose;

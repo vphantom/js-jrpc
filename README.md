@@ -1,6 +1,6 @@
-# jrpc v3.0.2-beta
+# jrpc v3.1.0
 
-[![Build Status](https://travis-ci.org/vphantom/js-jrpc.svg?branch=v3.0.2-beta)](https://travis-ci.org/vphantom/js-jrpc) [![Coverage Status](https://coveralls.io/repos/github/vphantom/js-jrpc/badge.svg?branch=v3.0.2-beta)](https://coveralls.io/github/vphantom/js-jrpc?branch=v3.0.2-beta)
+[![Build Status](https://travis-ci.org/vphantom/js-jrpc.svg?branch=v3.1.0)](https://travis-ci.org/vphantom/js-jrpc) [![Coverage Status](https://coveralls.io/repos/github/vphantom/js-jrpc/badge.svg?branch=v3.1.0)](https://coveralls.io/github/vphantom/js-jrpc?branch=v3.1.0)
 
 Streaming bidirectional backwards-compatible extended JSON-RPC 2.0 in JavaScript
 
