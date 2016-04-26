@@ -157,6 +157,10 @@ If you expect to deal with network latency, XmlHttpRequest long-poll related del
 
 If you expect to deal with computationally-intensive methods, you might want to increase this as appropriate.  Make sure, however, that the other end will wait even longer to allow for network latency and outages on top of this execution response time.
 
+### remote.shutdown()
+
+Frees as many resources as possible, cancels any outstanding timeouts and marks `remote` as no longer usable.  If you're permanently done with the JRPC instance, this can help performance and garbage collection a bit.
+
 ### remote.expose(*methodName*, *callback*)
 
 Individually add declaration that `callback` as implementing `methodName` to the other end. Whenever calls from the other end will be processed, `callback` will be invoked and is expected to call JRPC's next callback with Node standard `(err, result)` arguments:

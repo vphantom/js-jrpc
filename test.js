@@ -480,6 +480,36 @@ test('I/O and timeouts', function(t) {
   }, 500);
 });
 
+test('Graceful shutdown', function(t) {
+  var remote = new JRPC({remoteTimeout: 0.1, localTimeout: 0.1});
+  var snitch = false;
+
+  t.plan(2);
+
+  remote
+    .call('system.listComponents', null, function() {
+      snitch = true;
+    })
+    .receive({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'system.listComponents'
+    })
+    .shutdown()
+    .call('system.listComponents', null, function() {
+      snitch = true;
+    })
+    .upgrade()
+    .receive('[ malformed JSON here { ...')
+    .expose('testMethod', function() {})
+  ;
+
+  setTimeout(function() {
+    t.notOk(snitch, 'remote timeout was never called');
+    t.deepEqual(remote.exposed, {}, 'expose() did nothing');
+  }, 250);
+});
+
 test.onFinish(function() {
   if (typeof phantom !== 'undefined') {
     /* global phantom: true */
