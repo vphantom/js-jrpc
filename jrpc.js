@@ -37,7 +37,7 @@ function JRPC(options) {
   this.exposed = {};
 
   this.exposed['system.listComponents'] = (function(params, next) {
-    if (typeof params === 'object') {
+    if (typeof params === 'object' && params !== null) {
       this.remoteComponents = params;
       this.remoteComponents['system._upgraded'] = true;
     }
