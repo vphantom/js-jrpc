@@ -1,3 +1,4 @@
+.session.vim
 test.browser.js
 bower_components
 *.log
