@@ -67,7 +67,7 @@ test('Handling incoming messages', function(t) {
     responses: []
   };
 
-  t.plan(5);
+  t.plan(4);
 
   try {
     r.receive('[ malformed JSON here { ...');
@@ -81,11 +81,6 @@ test('Handling incoming messages', function(t) {
     r.outbox,
     emptyOutbox,
     'outbox still empty after invalid or empty messages'
-  );
-  t.equal(
-    r.discardSerial,
-    0,
-    'discardSerial still zero after invalid or empty messages'
   );
   t.deepEqual(
     r.localTimers,
@@ -153,18 +148,13 @@ test('Servicing requests', function(t) {
   var r = new JRPC();
   var i = 0;
 
-  t.plan(6);
+  t.plan(5);
 
   r.expose('listener', function(params, next) {
     t.deepEqual(
       params,
       {hint: true},
       'listen-only method called with expected arguments'
-    );
-    t.equal(
-      r.discardSerial,
-      -1,
-      'for listen-only method, discardSerial was decremented exactly once'
     );
     return setImmediate(next.bind(null, false, 'ignored'));
   });

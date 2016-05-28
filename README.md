@@ -1,6 +1,6 @@
-# jrpc v3.1.0
+# jrpc v3.1.1
 
-[![Build Status](https://travis-ci.org/vphantom/js-jrpc.svg?branch=v3.1.0)](https://travis-ci.org/vphantom/js-jrpc) [![Coverage Status](https://coveralls.io/repos/github/vphantom/js-jrpc/badge.svg?branch=v3.1.0)](https://coveralls.io/github/vphantom/js-jrpc?branch=v3.1.0)
+[![Build Status](https://travis-ci.org/vphantom/js-jrpc.svg?branch=v3.1.1)](https://travis-ci.org/vphantom/js-jrpc) [![Coverage Status](https://coveralls.io/repos/github/vphantom/js-jrpc/badge.svg?branch=v3.1.1)](https://coveralls.io/github/vphantom/js-jrpc?branch=v3.1.1)
 
 Streaming bidirectional backwards-compatible extended JSON-RPC 2.0 in JavaScript
 
@@ -163,7 +163,7 @@ Frees as many resources as possible, cancels any outstanding timeouts and marks 
 
 ### remote.expose(*methodName*, *callback*)
 
-Individually add declaration that `callback` as implementing `methodName` to the other end. Whenever calls from the other end will be processed, `callback` will be invoked and is expected to call JRPC's next callback with Node standard `(err, result)` arguments:
+Individually declare that `callback` is implementing `methodName`. Whenever calls from the other end will be processed, `callback` will be invoked and is expected to call JRPC's next callback with Node standard `(err, result)` arguments:
 
 ```js
 remote.expose('foo.bar', function(params, next) {
@@ -200,7 +200,7 @@ Note that it is important to handshake _after_ having exposed your service metho
 
 ##### Bluebird: remote.callAsync(*methodName*, *params*)
 
-Queue a call to the other end's method `methodName` with `params` as a single argument.  If you supplied a callback, it is _guaranteed_ to be invoked even if the server never responds, in which case it would be in error, after a timeout.  Note that omitting a callback prevents your application from detecting errors, so it should usually be reserved for methods which return no value (called "notifications" in JSON-RPC 2.0).
+Queue a call to the other end's method `methodName` with `params` as a single argument.  If you supplied a callback, it is _guaranteed_ to be invoked even if the server never responds, in which case it would be in error, after a timeout.  Note that omitting a callback implies that you're calling a remote method which returns no value (called "notifications" in JSON-RPC 2.0).
 
 Note that after a successful `remote.upgrade()`, any attempts to call a `methodName` not disclosed by the remote end during capability handshake will immediately fail.  This is to save on useless network round-trips.
 
@@ -236,7 +236,7 @@ It is **strongly recommended** to keep a non-zero remoteTimeout when using co-ro
 
 ### remote.notify(*methodName*[, *params*])
 
-Convenience shortcut to `remote.call()` so that your code can more clearly distinguish between method calls expecting a return value and one-way notifications.
+Convenience shortcut to `remote.call()` so that your code can more clearly distinguish between method calls expecting a return value and one-way notifications.  By convention, it should never be invoked with a third `callback` argument.
 
 ### remote.receive(*message*)
 

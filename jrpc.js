@@ -22,7 +22,6 @@ function JRPC(options) {
   this.remoteTimeout = 60000;
   this.localTimeout = 0;
   this.serial = 0;
-  this.discardSerial = 0;
   this.outbox = {
     requests : [],
     responses: []
@@ -337,13 +336,13 @@ function call(methodName, params, next) {
     return this;
   }
 
-  this.serial++;
-  request.id = this.serial;
   if (typeof params === 'object') {
     request.params = params;
   }
 
+  this.serial++;
   if (typeof next === 'function') {
+    request.id = this.serial;
     this.inbox[this.serial] = next;
   }
   this.outbox.requests.push(request);
@@ -365,8 +364,7 @@ function call(methodName, params, next) {
             code   : -1000,
             message: 'Timed out waiting for response'
           }
-        },
-        true
+        }
       ),
       this.remoteTimeout
     );
@@ -392,25 +390,22 @@ function call(methodName, params, next) {
  * Deliver a received result
  *
  * @param {Object}  res     The single result to parse
- * @param {boolean} timeout We come from a timeout
  *
  * @return {undefined} No return value
  */
-function deliverResponse(res, timeout) {
+function deliverResponse(res) {
   var err = false;
   var result = null;
 
   if (this.active && 'id' in res && res['id'] in this.outTimers) {
-    if (timeout === true) {
-      clearTimeout(this.outTimers[res['id']]);
-    }
+    clearTimeout(this.outTimers[res['id']]);  // Passing true instead of a timeout is safe
     delete this.outTimers[res['id']];
   } else {
     // Silently ignoring second response to same request
     return;
   }
 
-  if ('id' in res && res['id'] in this.inbox) {
+  if (res['id'] in this.inbox) {
     if ('error' in res) {
       err = res['error'];
     } else {
@@ -514,31 +509,27 @@ function serveRequest(request) {
     }
   }
 
-  if (id === null) {
-    this.discardSerial--;
-    id = this.discardSerial;  // Try to avoid collisions with remote end
-  }
-  if (this.localTimeout > 0) {
-    this.localTimers[id] = setTimeout(
-      sendResponse.bind(
-        this,
-        id,
-        {
-          code   : -1002,
-          message: 'Method handler timed out'
-        },
-        undefined,
-        true  // Hint that we're the timeout
-      ),
-      this.localTimeout
-    );
-  } else {
-    this.localTimers[id] = true;
+  if (id !== null) {
+    if (this.localTimeout > 0) {
+      this.localTimers[id] = setTimeout(
+        sendResponse.bind(
+          this,
+          id,
+          {
+            code   : -1002,
+            message: 'Method handler timed out'
+          }
+        ),
+        this.localTimeout
+      );
+    } else {
+      this.localTimers[id] = true;
+    }
   }
   setImmediate(
     this.exposed[request.method],
     params,
-    sendResponse.bind(this, id)  // id will be unknown, thus will be silent
+    sendResponse.bind(this, id)
   );
 
   return;
@@ -552,27 +543,24 @@ function serveRequest(request) {
  * @param {number}  id        Serial number, bound, no need to supply
  * @param {boolean} err       Anything non-falsey means error and is sent
  * @param {Object}  result    Any result you wish to produce
- * @param {boolean} [timeout] We're invoked from the method timeout
  *
  * @return {undefined} No return value
  */
-function sendResponse(id, err, result, timeout) {
+function sendResponse(id, err, result) {
   var response = {
     jsonrpc: '2.0',
     id     : id
   };
 
-  if (this.active && id in this.localTimers) {
-    if (timeout === true) {
-      clearTimeout(this.localTimers[id]);
-    }
-    delete this.localTimers[id];
-  } else {
-    // Silently ignoring second response to same request
+  if (id === null) {
     return;
   }
 
-  if (id === null || id < 0) {
+  if (this.active && id in this.localTimers) {
+    clearTimeout(this.localTimers[id]);  // Passing true instead of a timeout is safe
+    delete this.localTimers[id];
+  } else {
+    // Silently ignoring second response to same request
     return;
   }
 
