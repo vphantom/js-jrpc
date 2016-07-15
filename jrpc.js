@@ -615,9 +615,10 @@ JRPC.prototype.transmit = transmit;
 JRPC.prototype.setTransmitter = setTransmitter;
 
 // Support Bluebird automatically if it's globally available
-
+var Promise = Promise || {};
 if (typeof Promise.promisify === 'function') {
   JRPC.prototype.callAsync = Promise.promisify(call);
 }
+
 
 module.exports = JRPC;
