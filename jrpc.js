@@ -616,7 +616,7 @@ JRPC.prototype.setTransmitter = setTransmitter;
 
 // Support Bluebird automatically if it's globally available
 
-if (typeof Promise.promisify === 'function') {
+if (typeof Promise !== 'undefined' && typeof Promise.promisify === 'function') {
   JRPC.prototype.callAsync = Promise.promisify(call);
 }
 
