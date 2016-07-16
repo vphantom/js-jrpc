@@ -1,6 +1,6 @@
 {
   "name": "jrpc",
-  "version": "3.1.1",
+  "version": "3.1.2",
   "description": "Streaming bidirectional backwards-compatible extended JSON-RPC 2.0 in JavaScript",
   "main": "jrpc.js",
   "scripts": {
