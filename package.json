@@ -28,7 +28,6 @@
     "bluebird": "^3.3.5",
     "browserify": "^13.0.0",
     "coveralls": "^2.11.9",
-    "eslint": "^2.8.0",
     "faucet": "0.0.1",
     "istanbul": "^0.4.3",
     "tape": "^4.5.1"

@@ -23,26 +23,26 @@ function JRPC(options) {
   this.localTimeout = 0;
   this.serial = 0;
   this.outbox = {
-    requests : [],
+    requests: [],
     responses: []
   };
   this.inbox = {};
   this.localTimers = {};
   this.outTimers = {};
   this.localComponents = {
-    'system.listComponents'      : true,
+    'system.listComponents': true,
     'system.extension.dual-batch': true
   };
   this.remoteComponents = {};
   this.exposed = {};
 
-  this.exposed['system.listComponents'] = (function(params, next) {
+  this.exposed['system.listComponents'] = function(params, next) {
     if (typeof params === 'object' && params !== null) {
       this.remoteComponents = params;
       this.remoteComponents['system._upgraded'] = true;
     }
     return next(null, this.localComponents);
-  }).bind(this);
+  }.bind(this);
 
   this.exposed['system.extension.dual-batch'] = function(params, next) {
     return next(null, true);
@@ -50,15 +50,15 @@ function JRPC(options) {
 
   if (typeof options === 'object') {
     if (
-      'remoteTimeout' in options
-      && typeof options['remoteTimeout'] === 'number'
+      'remoteTimeout' in options &&
+      typeof options['remoteTimeout'] === 'number'
     ) {
       this.remoteTimeout = options['remoteTimeout'] * 1000;
     }
 
     if (
-      'localTimeout' in options
-      && typeof options['localTimeout'] === 'number'
+      'localTimeout' in options &&
+      typeof options['localTimeout'] === 'number'
     ) {
       this.localTimeout = options['localTimeout'] * 1000;
     }
@@ -101,7 +101,6 @@ function shutdown() {
   return instance;
 }
 
-
 // I/O
 
 /**
@@ -119,7 +118,7 @@ function transmit(callback) {
   var msg = null;
   var outpacket = {
     responses: [],
-    requests : []
+    requests: []
   };
 
   if (typeof callback !== 'function') {
@@ -132,14 +131,14 @@ function transmit(callback) {
   iRes = this.outbox.responses.length;
   iReq = this.outbox.requests.length;
   if (
-    iRes > 0
-    && iReq > 0
-    && 'system.extension.dual-batch' in this.remoteComponents
+    iRes > 0 &&
+    iReq > 0 &&
+    'system.extension.dual-batch' in this.remoteComponents
   ) {
     // Use dual-batch extension to send it all at once
     outpacket = msg = {
       responses: this.outbox.responses,
-      requests : this.outbox.requests
+      requests: this.outbox.requests
     };
     // Setting length=0 would preserve references and we want to renew them
     this.outbox.responses = [];
@@ -150,14 +149,14 @@ function transmit(callback) {
       outpacket.responses = msg = this.outbox.responses;
       this.outbox.responses = [];
     } else {
-      outpacket.responses.push(msg = this.outbox.responses.pop());
+      outpacket.responses.push((msg = this.outbox.responses.pop()));
     }
   } else if (iReq > 0) {
     if (iReq > 1) {
       outpacket.requests = msg = this.outbox.requests;
       this.outbox.requests = [];
     } else {
-      outpacket.requests.push(msg = this.outbox.requests.pop());
+      outpacket.requests.push((msg = this.outbox.requests.pop()));
     }
   } else {
     return this;
@@ -255,8 +254,8 @@ function receive(msg) {
   } else if (typeof msg === 'object') {
     // Could we be a 'dual-batch' extended message?
     if (
-      typeof msg.requests !== 'undefined'
-      && typeof msg.responses !== 'undefined'
+      typeof msg.requests !== 'undefined' &&
+      typeof msg.responses !== 'undefined'
     ) {
       requests = msg.requests;
       responses = msg.responses;
@@ -286,15 +285,14 @@ function upgrade() {
   return this.call(
     'system.listComponents',
     this.localComponents,
-    (function(err, result) {
+    function(err, result) {
       if (!err && typeof result === 'object') {
         this.remoteComponents = result;
         this.remoteComponents['system._upgraded'] = true;
       }
-    }).bind(this)
+    }.bind(this)
   );
 }
-
 
 // Client side
 
@@ -310,7 +308,7 @@ function upgrade() {
 function call(methodName, params, next) {
   var request = {
     jsonrpc: '2.0',
-    method : methodName
+    method: methodName
   };
 
   if (!this.active) {
@@ -323,13 +321,13 @@ function call(methodName, params, next) {
   }
 
   if (
-    'system._upgraded' in this.remoteComponents
-    && !(methodName in this.remoteComponents)
+    'system._upgraded' in this.remoteComponents &&
+    !(methodName in this.remoteComponents)
   ) {
     // We're upgraded, yet method name isn't found, immediate error!
     if (typeof next === 'function') {
       setImmediate(next, {
-        code   : -32601,
+        code: -32601,
         message: 'Unknown remote method'
       });
     }
@@ -355,21 +353,18 @@ function call(methodName, params, next) {
   }
   if (this.remoteTimeout > 0) {
     this.outTimers[this.serial] = setTimeout(
-      deliverResponse.bind(
-        this,
-        {
-          jsonrpc: '2.0',
-          id     : this.serial,
-          error  : {
-            code   : -1000,
-            message: 'Timed out waiting for response'
-          }
+      deliverResponse.bind(this, {
+        jsonrpc: '2.0',
+        id: this.serial,
+        error: {
+          code: -1000,
+          message: 'Timed out waiting for response'
         }
-      ),
+      }),
       this.remoteTimeout
     );
   } else {
-    this.outTimers[this.serial] = true;  // Placeholder
+    this.outTimers[this.serial] = true; // Placeholder
   }
 
   return this;
@@ -398,7 +393,7 @@ function deliverResponse(res) {
   var result = null;
 
   if (this.active && 'id' in res && res['id'] in this.outTimers) {
-    clearTimeout(this.outTimers[res['id']]);  // Passing true instead of a timeout is safe
+    clearTimeout(this.outTimers[res['id']]); // Passing true instead of a timeout is safe
     delete this.outTimers[res['id']];
   } else {
     // Silently ignoring second response to same request
@@ -416,7 +411,6 @@ function deliverResponse(res) {
   }
   // Silently ignore timeout duplicate and malformed responses
 }
-
 
 // Server side
 
@@ -480,7 +474,7 @@ function serveRequest(request) {
     return;
   }
 
-  id = (typeof request.id !== 'undefined' ? request.id : null);
+  id = typeof request.id !== 'undefined' ? request.id : null;
   if (typeof request.method !== 'string') {
     if (id !== null) {
       this.localTimers[id] = true;
@@ -512,14 +506,10 @@ function serveRequest(request) {
   if (id !== null) {
     if (this.localTimeout > 0) {
       this.localTimers[id] = setTimeout(
-        sendResponse.bind(
-          this,
-          id,
-          {
-            code   : -1002,
-            message: 'Method handler timed out'
-          }
-        ),
+        sendResponse.bind(this, id, {
+          code: -1002,
+          message: 'Method handler timed out'
+        }),
         this.localTimeout
       );
     } else {
@@ -549,7 +539,7 @@ function serveRequest(request) {
 function sendResponse(id, err, result) {
   var response = {
     jsonrpc: '2.0',
-    id     : id
+    id: id
   };
 
   if (id === null) {
@@ -557,7 +547,7 @@ function sendResponse(id, err, result) {
   }
 
   if (this.active && id in this.localTimers) {
-    clearTimeout(this.localTimers[id]);  // Passing true instead of a timeout is safe
+    clearTimeout(this.localTimers[id]); // Passing true instead of a timeout is safe
     delete this.localTimers[id];
   } else {
     // Silently ignoring second response to same request
@@ -567,30 +557,26 @@ function sendResponse(id, err, result) {
   if (typeof err !== 'undefined' && err !== null && err !== false) {
     if (typeof err === 'number') {
       response.error = {
-        code   : err,
+        code: err,
         message: 'error'
       };
     } else if (err === true) {
       response.error = {
-        code   : -1,
+        code: -1,
         message: 'error'
       };
     } else if (typeof err === 'string') {
       response.error = {
-        code   : -1,
+        code: -1,
         message: err
       };
-    } else if (
-      typeof err === 'object'
-      && 'code' in err
-      && 'message' in err
-    ) {
+    } else if (typeof err === 'object' && 'code' in err && 'message' in err) {
       response.error = err;
     } else {
       response.error = {
-        code   : -2,
+        code: -2,
         message: 'error',
-        data   : err
+        data: err
       };
     }
   } else {
@@ -601,7 +587,6 @@ function sendResponse(id, err, result) {
   // If we're interactive, send the new response
   this.transmit();
 }
-
 
 // Public methods
 

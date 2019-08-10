@@ -1,5 +1,3 @@
-/* eslint max-len: "off", vars-on-top: "off", require-jsdoc: "off", key-spacing: "off" */
-
 'use strict';
 
 global.Promise = require('bluebird');
@@ -21,7 +19,7 @@ function testErrorString(params, next) {
 }
 
 function testErrorData(params, next) {
-  return setImmediate(next.bind(null, {hint: true}));
+  return setImmediate(next.bind(null, { hint: true }));
 }
 
 function testSlow(params, next) {
@@ -59,11 +57,10 @@ function connect(end1, end2) {
   });
 }
 
-
 test('Handling incoming messages', function(t) {
   var r = new JRPC();
   var emptyOutbox = {
-    requests : [],
+    requests: [],
     responses: []
   };
 
@@ -94,7 +91,6 @@ test('Handling incoming messages', function(t) {
   );
 });
 
-
 test('Handling outgoing messages', function(t) {
   var r = new JRPC();
 
@@ -107,16 +103,16 @@ test('Handling outgoing messages', function(t) {
   r.transmit(function(msg, next) {
     t.deepEqual(
       r.outbox,
-      {requests: [1, 2, 3], responses: []},
+      { requests: [1, 2, 3], responses: [] },
       'outbox responses were emptied during transmission attempt'
     );
 
     r.outbox.responses.push(9);
-    next(true);  // We know this is a small synchronous method
+    next(true); // We know this is a small synchronous method
 
     t.deepEqual(
       r.outbox,
-      {requests : [1, 2, 3], responses: [9, 3, 4, 5]},
+      { requests: [1, 2, 3], responses: [9, 3, 4, 5] },
       'outbox responses were restored non-destructively after transmission failure'
     );
 
@@ -136,13 +132,12 @@ test('Handling outgoing messages', function(t) {
 
       t.deepEqual(
         r.outbox,
-        {requests: [8, 1, 2, 3], responses: []},
+        { requests: [8, 1, 2, 3], responses: [] },
         'outbox requests were restored non-destructively after transmission failure'
       );
     });
   });
 });
-
 
 test('Servicing requests', function(t) {
   var r = new JRPC();
@@ -153,7 +148,7 @@ test('Servicing requests', function(t) {
   r.expose('listener', function(params, next) {
     t.deepEqual(
       params,
-      {hint: true},
+      { hint: true },
       'listen-only method called with expected arguments'
     );
     return setImmediate(next.bind(null, false, 'ignored'));
@@ -168,7 +163,7 @@ test('Servicing requests', function(t) {
           {
             jsonrpc: '2.0',
             id: 10,
-            error: {code: -32601, message: 'error'}
+            error: { code: -32601, message: 'error' }
           },
           'garbage inputs are skipped, error -32601 confirmed (unknown method)'
         );
@@ -179,7 +174,7 @@ test('Servicing requests', function(t) {
           {
             jsonrpc: '2.0',
             id: 11,
-            error: {code: -32602, message: 'error'}
+            error: { code: -32602, message: 'error' }
           },
           'errors -32602 confirmed (malformed params)'
         );
@@ -190,7 +185,7 @@ test('Servicing requests', function(t) {
           {
             jsonrpc: '2.0',
             id: 12,
-            error: {code: -32600, message: 'error'}
+            error: { code: -32600, message: 'error' }
           },
           'errors -32600 confirmed (malformed method)'
         );
@@ -201,7 +196,7 @@ test('Servicing requests', function(t) {
           {
             jsonrpc: '2.0',
             id: 13,
-            error: {code: -32600, message: 'error'}
+            error: { code: -32600, message: 'error' }
           },
           'no response was sent for listen-only method'
         );
@@ -212,7 +207,7 @@ test('Servicing requests', function(t) {
     return next(false);
   });
   r.receive([
-    {jsonrpc: '2.0', method: 'unknown', id: 10},
+    { jsonrpc: '2.0', method: 'unknown', id: 10 },
     {},
     undefined,
     null,
@@ -220,17 +215,16 @@ test('Servicing requests', function(t) {
     false
   ]);
   r.receive([
-    {jsonrpc: '2.0', method: 'system.listComponents', params: 23, id: 11},
-    {jsonrpc: '2.0', method: 23, id: 12},
-    {jsonrpc: '2.0', method: 'listener', params: {hint: true}},
-    {jsonrpc: '2.0', method: 23, id: 13}
+    { jsonrpc: '2.0', method: 'system.listComponents', params: 23, id: 11 },
+    { jsonrpc: '2.0', method: 23, id: 12 },
+    { jsonrpc: '2.0', method: 'listener', params: { hint: true } },
+    { jsonrpc: '2.0', method: 23, id: 13 }
   ]);
 });
 
-
 test('I/O and timeouts', function(t) {
-  var end1 = new JRPC({remoteTimeout: 0.35, localTimeout: 0.15});
-  var end2 = new JRPC({remoteTimeout: 0.35, localTimeout: 0});
+  var end1 = new JRPC({ remoteTimeout: 0.35, localTimeout: 0.15 });
+  var end2 = new JRPC({ remoteTimeout: 0.35, localTimeout: 0 });
 
   t.plan(22);
 
@@ -240,24 +234,16 @@ test('I/O and timeouts', function(t) {
   end1.expose('errorData', testErrorData);
   end1.expose('slow', testSlow);
   end2.expose({
-    echo : testEcho,
+    echo: testEcho,
     errorTrue: testErrorTrue,
     errorString: testErrorString,
     errorData: testErrorData,
-    slow : testSlow
+    slow: testSlow
   });
 
-  t.equal(
-    end1.localTimeout,
-    150,
-    'localTimeout is set by constructor'
-  );
+  t.equal(end1.localTimeout, 150, 'localTimeout is set by constructor');
 
-  t.equal(
-    end2.remoteTimeout,
-    350,
-    'remoteTimeout is set by constructor'
-  );
+  t.equal(end2.remoteTimeout, 350, 'remoteTimeout is set by constructor');
 
   t.deepEqual(
     end1.exposed.keys,
@@ -276,11 +262,11 @@ test('I/O and timeouts', function(t) {
           jsonrpc: '2.0',
           method: 'system.listComponents',
           params: {
-            'echo': true,
-            'errorTrue': true,
-            'errorString': true,
-            'errorData': true,
-            'slow': true,
+            echo: true,
+            errorTrue: true,
+            errorString: true,
+            errorData: true,
+            slow: true,
             'system.extension.dual-batch': true,
             'system.listComponents': true
           }
@@ -302,11 +288,11 @@ test('I/O and timeouts', function(t) {
           jsonrpc: '2.0',
           method: 'system.listComponents',
           params: {
-            'echo': true,
-            'errorTrue': true,
-            'errorString': true,
-            'errorData': true,
-            'slow': true,
+            echo: true,
+            errorTrue: true,
+            errorString: true,
+            errorData: true,
+            slow: true,
             'system.extension.dual-batch': true,
             'system.listComponents': true
           }
@@ -317,7 +303,10 @@ test('I/O and timeouts', function(t) {
     'bogus transmit left outbox intact'
   );
 
-  connect(end1, end2);
+  connect(
+    end1,
+    end2
+  );
 
   setTimeout(function() {
     t.deepEqual(
@@ -326,11 +315,11 @@ test('I/O and timeouts', function(t) {
         'system._upgraded': true,
         'system.listComponents': true,
         'system.extension.dual-batch': true,
-        'echo': true,
-        'errorTrue': true,
-        'errorString': true,
-        'errorData': true,
-        'slow': true
+        echo: true,
+        errorTrue: true,
+        errorString: true,
+        errorData: true,
+        slow: true
       },
       'origin upgraded successfully'
     );
@@ -341,18 +330,22 @@ test('I/O and timeouts', function(t) {
         'system._upgraded': true,
         'system.listComponents': true,
         'system.extension.dual-batch': true,
-        'echo': true,
-        'errorTrue': true,
-        'errorString': true,
-        'errorData': true,
-        'slow': true
+        echo: true,
+        errorTrue: true,
+        errorString: true,
+        errorData: true,
+        slow: true
       },
       'receiver upgraded successfully'
     );
 
     end1.call('non-existent', function(err) {
       t.ok(err, 'call to non-existent method yields error');
-      t.equals(err.code, -32601, 'call to non-existent method yields error -32601');
+      t.equals(
+        err.code,
+        -32601,
+        'call to non-existent method yields error -32601'
+      );
     });
 
     end1.call('system.extension.dual-batch', [], function(err) {
@@ -399,18 +392,10 @@ test('I/O and timeouts', function(t) {
     });
 
     end1.call('errorTrue', function(err) {
-      t.equals(
-        err.code,
-        -1,
-        'errorTrue method yielded -1'
-      );
+      t.equals(err.code, -1, 'errorTrue method yielded -1');
     });
     end1.call('errorString', [], function(err) {
-      t.equals(
-        err.code,
-        -1,
-        'errorString method yielded -1'
-      );
+      t.equals(err.code, -1, 'errorString method yielded -1');
       t.equals(
         err.message,
         'error string',
@@ -418,14 +403,10 @@ test('I/O and timeouts', function(t) {
       );
     });
     end1.call('errorData', [], function(err) {
-      t.equals(
-        err.code,
-        -2,
-        'errorData method yielded -2'
-      );
+      t.equals(err.code, -2, 'errorData method yielded -2');
       t.deepEquals(
         err.data,
-        {hint: true},
+        { hint: true },
         'errorData produced the expected extra error data'
       );
     });
@@ -442,7 +423,7 @@ test('I/O and timeouts', function(t) {
       end2.setTransmitter(null);
 
       // Let's throw in an invalid response out of nowhere
-      end1.outbox.responses.push({id: 1000, result: true});
+      end1.outbox.responses.push({ id: 1000, result: true });
 
       end1.call('echo', ['test'], function(err, res) {
         t.notOk(err, 'batch echo 1 is successful');
@@ -471,7 +452,7 @@ test('I/O and timeouts', function(t) {
 });
 
 test('Graceful shutdown', function(t) {
-  var remote = new JRPC({remoteTimeout: 0.1, localTimeout: 0.1});
+  var remote = new JRPC({ remoteTimeout: 0.1, localTimeout: 0.1 });
   var snitch = false;
 
   t.plan(2);
@@ -491,8 +472,7 @@ test('Graceful shutdown', function(t) {
     })
     .upgrade()
     .receive('[ malformed JSON here { ...')
-    .expose('testMethod', function() {})
-  ;
+    .expose('testMethod', function() {});
 
   setTimeout(function() {
     t.notOk(snitch, 'remote timeout was never called');
