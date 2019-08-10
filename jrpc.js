@@ -352,17 +352,31 @@ function call(methodName, params, next) {
     return this;
   }
   if (this.remoteTimeout > 0) {
-    this.outTimers[this.serial] = setTimeout(
-      deliverResponse.bind(this, {
-        jsonrpc: '2.0',
-        id: this.serial,
-        error: {
-          code: -1000,
-          message: 'Timed out waiting for response'
-        }
-      }),
-      this.remoteTimeout
-    );
+    if (typeof this.transmitter === 'function') {
+      this.outTimers[this.serial] = setTimeout(
+        deliverResponse.bind(this, {
+          jsonrpc: '2.0',
+          id: this.serial,
+          error: {
+            code: -1000,
+            message: 'Timed out waiting for response'
+          }
+        }),
+        this.remoteTimeout
+      );
+    } else {
+      this.outTimers[this.serial] = setTimeout(
+        deliverResponse.bind(this, {
+          jsonrpc: '2.0',
+          id: this.serial,
+          error: {
+            code: -1100,
+            message: 'Timed out before transmitter was set'
+          }
+        }),
+        this.remoteTimeout
+      );
+    }
   } else {
     this.outTimers[this.serial] = true; // Placeholder
   }
