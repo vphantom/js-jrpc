@@ -1,5 +1,5 @@
-(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.JRPC = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-(function (global){
+(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.JRPC = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+(function (global,setImmediate){
 /*! JRPC v3.1.0
  * <https://github.com/vphantom/js-jrpc>
  * Copyright 2016 Stéphane Lavergne
@@ -24,28 +24,27 @@ function JRPC(options) {
   this.remoteTimeout = 60000;
   this.localTimeout = 0;
   this.serial = 0;
-  this.discardSerial = 0;
   this.outbox = {
-    requests : [],
+    requests: [],
     responses: []
   };
   this.inbox = {};
   this.localTimers = {};
   this.outTimers = {};
   this.localComponents = {
-    'system.listComponents'      : true,
+    'system.listComponents': true,
     'system.extension.dual-batch': true
   };
   this.remoteComponents = {};
   this.exposed = {};
 
-  this.exposed['system.listComponents'] = (function(params, next) {
+  this.exposed['system.listComponents'] = function(params, next) {
     if (typeof params === 'object' && params !== null) {
       this.remoteComponents = params;
       this.remoteComponents['system._upgraded'] = true;
     }
     return next(null, this.localComponents);
-  }).bind(this);
+  }.bind(this);
 
   this.exposed['system.extension.dual-batch'] = function(params, next) {
     return next(null, true);
@@ -53,15 +52,15 @@ function JRPC(options) {
 
   if (typeof options === 'object') {
     if (
-      'remoteTimeout' in options
-      && typeof options['remoteTimeout'] === 'number'
+      'remoteTimeout' in options &&
+      typeof options['remoteTimeout'] === 'number'
     ) {
       this.remoteTimeout = options['remoteTimeout'] * 1000;
     }
 
     if (
-      'localTimeout' in options
-      && typeof options['localTimeout'] === 'number'
+      'localTimeout' in options &&
+      typeof options['localTimeout'] === 'number'
     ) {
       this.localTimeout = options['localTimeout'] * 1000;
     }
@@ -104,7 +103,6 @@ function shutdown() {
   return instance;
 }
 
-
 // I/O
 
 /**
@@ -122,7 +120,7 @@ function transmit(callback) {
   var msg = null;
   var outpacket = {
     responses: [],
-    requests : []
+    requests: []
   };
 
   if (typeof callback !== 'function') {
@@ -135,14 +133,14 @@ function transmit(callback) {
   iRes = this.outbox.responses.length;
   iReq = this.outbox.requests.length;
   if (
-    iRes > 0
-    && iReq > 0
-    && 'system.extension.dual-batch' in this.remoteComponents
+    iRes > 0 &&
+    iReq > 0 &&
+    'system.extension.dual-batch' in this.remoteComponents
   ) {
     // Use dual-batch extension to send it all at once
     outpacket = msg = {
       responses: this.outbox.responses,
-      requests : this.outbox.requests
+      requests: this.outbox.requests
     };
     // Setting length=0 would preserve references and we want to renew them
     this.outbox.responses = [];
@@ -153,14 +151,14 @@ function transmit(callback) {
       outpacket.responses = msg = this.outbox.responses;
       this.outbox.responses = [];
     } else {
-      outpacket.responses.push(msg = this.outbox.responses.pop());
+      outpacket.responses.push((msg = this.outbox.responses.pop()));
     }
   } else if (iReq > 0) {
     if (iReq > 1) {
       outpacket.requests = msg = this.outbox.requests;
       this.outbox.requests = [];
     } else {
-      outpacket.requests.push(msg = this.outbox.requests.pop());
+      outpacket.requests.push((msg = this.outbox.requests.pop()));
     }
   } else {
     return this;
@@ -258,8 +256,8 @@ function receive(msg) {
   } else if (typeof msg === 'object') {
     // Could we be a 'dual-batch' extended message?
     if (
-      typeof msg.requests !== 'undefined'
-      && typeof msg.responses !== 'undefined'
+      typeof msg.requests !== 'undefined' &&
+      typeof msg.responses !== 'undefined'
     ) {
       requests = msg.requests;
       responses = msg.responses;
@@ -289,15 +287,14 @@ function upgrade() {
   return this.call(
     'system.listComponents',
     this.localComponents,
-    (function(err, result) {
+    function(err, result) {
       if (!err && typeof result === 'object') {
         this.remoteComponents = result;
         this.remoteComponents['system._upgraded'] = true;
       }
-    }).bind(this)
+    }.bind(this)
   );
 }
-
 
 // Client side
 
@@ -313,7 +310,7 @@ function upgrade() {
 function call(methodName, params, next) {
   var request = {
     jsonrpc: '2.0',
-    method : methodName
+    method: methodName
   };
 
   if (!this.active) {
@@ -326,26 +323,26 @@ function call(methodName, params, next) {
   }
 
   if (
-    'system._upgraded' in this.remoteComponents
-    && !(methodName in this.remoteComponents)
+    'system._upgraded' in this.remoteComponents &&
+    !(methodName in this.remoteComponents)
   ) {
     // We're upgraded, yet method name isn't found, immediate error!
     if (typeof next === 'function') {
       setImmediate(next, {
-        code   : -32601,
+        code: -32601,
         message: 'Unknown remote method'
       });
     }
     return this;
   }
 
-  this.serial++;
-  request.id = this.serial;
   if (typeof params === 'object') {
     request.params = params;
   }
 
+  this.serial++;
   if (typeof next === 'function') {
+    request.id = this.serial;
     this.inbox[this.serial] = next;
   }
   this.outbox.requests.push(request);
@@ -358,22 +355,18 @@ function call(methodName, params, next) {
   }
   if (this.remoteTimeout > 0) {
     this.outTimers[this.serial] = setTimeout(
-      deliverResponse.bind(
-        this,
-        {
-          jsonrpc: '2.0',
-          id     : this.serial,
-          error  : {
-            code   : -1000,
-            message: 'Timed out waiting for response'
-          }
-        },
-        true
-      ),
+      deliverResponse.bind(this, {
+        jsonrpc: '2.0',
+        id: this.serial,
+        error: {
+          code: -1000,
+          message: 'Timed out waiting for response'
+        }
+      }),
       this.remoteTimeout
     );
   } else {
-    this.outTimers[this.serial] = true;  // Placeholder
+    this.outTimers[this.serial] = true; // Placeholder
   }
 
   return this;
@@ -394,25 +387,22 @@ function call(methodName, params, next) {
  * Deliver a received result
  *
  * @param {Object}  res     The single result to parse
- * @param {boolean} timeout We come from a timeout
  *
  * @return {undefined} No return value
  */
-function deliverResponse(res, timeout) {
+function deliverResponse(res) {
   var err = false;
   var result = null;
 
   if (this.active && 'id' in res && res['id'] in this.outTimers) {
-    if (timeout === true) {
-      clearTimeout(this.outTimers[res['id']]);
-    }
+    clearTimeout(this.outTimers[res['id']]); // Passing true instead of a timeout is safe
     delete this.outTimers[res['id']];
   } else {
     // Silently ignoring second response to same request
     return;
   }
 
-  if ('id' in res && res['id'] in this.inbox) {
+  if (res['id'] in this.inbox) {
     if ('error' in res) {
       err = res['error'];
     } else {
@@ -423,7 +413,6 @@ function deliverResponse(res, timeout) {
   }
   // Silently ignore timeout duplicate and malformed responses
 }
-
 
 // Server side
 
@@ -487,7 +476,7 @@ function serveRequest(request) {
     return;
   }
 
-  id = (typeof request.id !== 'undefined' ? request.id : null);
+  id = typeof request.id !== 'undefined' ? request.id : null;
   if (typeof request.method !== 'string') {
     if (id !== null) {
       this.localTimers[id] = true;
@@ -516,31 +505,23 @@ function serveRequest(request) {
     }
   }
 
-  if (id === null) {
-    this.discardSerial--;
-    id = this.discardSerial;  // Try to avoid collisions with remote end
-  }
-  if (this.localTimeout > 0) {
-    this.localTimers[id] = setTimeout(
-      sendResponse.bind(
-        this,
-        id,
-        {
-          code   : -1002,
+  if (id !== null) {
+    if (this.localTimeout > 0) {
+      this.localTimers[id] = setTimeout(
+        sendResponse.bind(this, id, {
+          code: -1002,
           message: 'Method handler timed out'
-        },
-        undefined,
-        true  // Hint that we're the timeout
-      ),
-      this.localTimeout
-    );
-  } else {
-    this.localTimers[id] = true;
+        }),
+        this.localTimeout
+      );
+    } else {
+      this.localTimers[id] = true;
+    }
   }
   setImmediate(
     this.exposed[request.method],
     params,
-    sendResponse.bind(this, id)  // id will be unknown, thus will be silent
+    sendResponse.bind(this, id)
   );
 
   return;
@@ -554,57 +535,50 @@ function serveRequest(request) {
  * @param {number}  id        Serial number, bound, no need to supply
  * @param {boolean} err       Anything non-falsey means error and is sent
  * @param {Object}  result    Any result you wish to produce
- * @param {boolean} [timeout] We're invoked from the method timeout
  *
  * @return {undefined} No return value
  */
-function sendResponse(id, err, result, timeout) {
+function sendResponse(id, err, result) {
   var response = {
     jsonrpc: '2.0',
-    id     : id
+    id: id
   };
 
+  if (id === null) {
+    return;
+  }
+
   if (this.active && id in this.localTimers) {
-    if (timeout === true) {
-      clearTimeout(this.localTimers[id]);
-    }
+    clearTimeout(this.localTimers[id]); // Passing true instead of a timeout is safe
     delete this.localTimers[id];
   } else {
     // Silently ignoring second response to same request
     return;
   }
 
-  if (id === null || id < 0) {
-    return;
-  }
-
   if (typeof err !== 'undefined' && err !== null && err !== false) {
     if (typeof err === 'number') {
       response.error = {
-        code   : err,
+        code: err,
         message: 'error'
       };
     } else if (err === true) {
       response.error = {
-        code   : -1,
+        code: -1,
         message: 'error'
       };
     } else if (typeof err === 'string') {
       response.error = {
-        code   : -1,
+        code: -1,
         message: err
       };
-    } else if (
-      typeof err === 'object'
-      && 'code' in err
-      && 'message' in err
-    ) {
+    } else if (typeof err === 'object' && 'code' in err && 'message' in err) {
       response.error = err;
     } else {
       response.error = {
-        code   : -2,
+        code: -2,
         message: 'error',
-        data   : err
+        data: err
       };
     }
   } else {
@@ -615,7 +589,6 @@ function sendResponse(id, err, result, timeout) {
   // If we're interactive, send the new response
   this.transmit();
 }
-
 
 // Public methods
 
@@ -630,23 +603,112 @@ JRPC.prototype.setTransmitter = setTransmitter;
 
 // Support Bluebird automatically if it's globally available
 
-if (typeof Promise.promisify === 'function') {
+if (typeof Promise !== 'undefined' && typeof Promise.promisify === 'function') {
   JRPC.prototype.callAsync = Promise.promisify(call);
 }
 
 module.exports = JRPC;
 
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("timers").setImmediate)
 },{"timers":3}],2:[function(require,module,exports){
 // shim for using process in browser
-
 var process = module.exports = {};
+
+// cached from whatever global is present so that test runners that stub it
+// don't break things.  But we need to wrap it in a try catch in case it is
+// wrapped in strict mode code which doesn't define any globals.  It's inside a
+// function because try/catches deoptimize in certain engines.
+
+var cachedSetTimeout;
+var cachedClearTimeout;
+
+function defaultSetTimout() {
+    throw new Error('setTimeout has not been defined');
+}
+function defaultClearTimeout () {
+    throw new Error('clearTimeout has not been defined');
+}
+(function () {
+    try {
+        if (typeof setTimeout === 'function') {
+            cachedSetTimeout = setTimeout;
+        } else {
+            cachedSetTimeout = defaultSetTimout;
+        }
+    } catch (e) {
+        cachedSetTimeout = defaultSetTimout;
+    }
+    try {
+        if (typeof clearTimeout === 'function') {
+            cachedClearTimeout = clearTimeout;
+        } else {
+            cachedClearTimeout = defaultClearTimeout;
+        }
+    } catch (e) {
+        cachedClearTimeout = defaultClearTimeout;
+    }
+} ())
+function runTimeout(fun) {
+    if (cachedSetTimeout === setTimeout) {
+        //normal enviroments in sane situations
+        return setTimeout(fun, 0);
+    }
+    // if setTimeout wasn't available but was latter defined
+    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
+        cachedSetTimeout = setTimeout;
+        return setTimeout(fun, 0);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedSetTimeout(fun, 0);
+    } catch(e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
+            return cachedSetTimeout.call(null, fun, 0);
+        } catch(e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
+            return cachedSetTimeout.call(this, fun, 0);
+        }
+    }
+
+
+}
+function runClearTimeout(marker) {
+    if (cachedClearTimeout === clearTimeout) {
+        //normal enviroments in sane situations
+        return clearTimeout(marker);
+    }
+    // if clearTimeout wasn't available but was latter defined
+    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
+        cachedClearTimeout = clearTimeout;
+        return clearTimeout(marker);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedClearTimeout(marker);
+    } catch (e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
+            return cachedClearTimeout.call(null, marker);
+        } catch (e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
+            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
+            return cachedClearTimeout.call(this, marker);
+        }
+    }
+
+
+
+}
 var queue = [];
 var draining = false;
 var currentQueue;
 var queueIndex = -1;
 
 function cleanUpNextTick() {
+    if (!draining || !currentQueue) {
+        return;
+    }
     draining = false;
     if (currentQueue.length) {
         queue = currentQueue.concat(queue);
@@ -662,7 +724,7 @@ function drainQueue() {
     if (draining) {
         return;
     }
-    var timeout = setTimeout(cleanUpNextTick);
+    var timeout = runTimeout(cleanUpNextTick);
     draining = true;
 
     var len = queue.length;
@@ -679,7 +741,7 @@ function drainQueue() {
     }
     currentQueue = null;
     draining = false;
-    clearTimeout(timeout);
+    runClearTimeout(timeout);
 }
 
 process.nextTick = function (fun) {
@@ -691,7 +753,7 @@ process.nextTick = function (fun) {
     }
     queue.push(new Item(fun, args));
     if (queue.length === 1 && !draining) {
-        setTimeout(drainQueue, 0);
+        runTimeout(drainQueue);
     }
 };
 
@@ -719,6 +781,10 @@ process.off = noop;
 process.removeListener = noop;
 process.removeAllListeners = noop;
 process.emit = noop;
+process.prependListener = noop;
+process.prependOnceListener = noop;
+
+process.listeners = function (name) { return [] }
 
 process.binding = function (name) {
     throw new Error('process.binding is not supported');
@@ -731,6 +797,7 @@ process.chdir = function (dir) {
 process.umask = function() { return 0; };
 
 },{}],3:[function(require,module,exports){
+(function (setImmediate,clearImmediate){
 var nextTick = require('process/browser.js').nextTick;
 var apply = Function.prototype.apply;
 var slice = Array.prototype.slice;
@@ -807,5 +874,6 @@ exports.setImmediate = typeof setImmediate === "function" ? setImmediate : funct
 exports.clearImmediate = typeof clearImmediate === "function" ? clearImmediate : function(id) {
   delete immediateIds[id];
 };
-},{"process/browser.js":2}]},{},[1])(1)
+}).call(this,require("timers").setImmediate,require("timers").clearImmediate)
+},{"process/browser.js":2,"timers":3}]},{},[1])(1)
 });
