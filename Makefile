@@ -1,5 +1,5 @@
 BROWSERIFY := node_modules/.bin/browserify
-PHANTOMJS  := phantomjs
+PHANTOMJS  := OPENSSL_CONF=/etc/ssl/ phantomjs
 JS         := node_modules/.bin/uglifyjs --compress keep_infinity --mangle --comments "/Free software under/"
 TAP        := node_modules/.bin/faucet
 ISTANBUL   := node_modules/.bin/istanbul
