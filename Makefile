@@ -1,6 +1,6 @@
 BROWSERIFY := node_modules/.bin/browserify
 PHANTOMJS  := phantomjs
-JS         := node_modules/.bin/uglifyjs --compress --mangle --comments "/Free software under/"
+JS         := node_modules/.bin/uglifyjs --compress keep_infinity --mangle --comments "/Free software under/"
 TAP        := node_modules/.bin/faucet
 ISTANBUL   := node_modules/.bin/istanbul
 
@@ -22,7 +22,7 @@ test:	test.browser.js
 	$(BROWSERIFY) -s JRPC $< -o $@
 
 %.min.js:	%.browser.js
-	$(JS) --source-map $@.map -o $@ -- $<
+	$(JS) --source-map filename=$@.map -o $@ -- $<
 
 .PHONY: help clean build test
 
